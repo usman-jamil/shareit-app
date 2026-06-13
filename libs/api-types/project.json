@@ -1,0 +1,13 @@
+{
+  "name": "api-types",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/api-types/src",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project api-types --web",
+  "targets": {
+    "generate-types": {
+      "command": "start-server-and-test serve:api http-get://localhost:5080/openapi/v1.json gen:types"
+    }
+  }
+}

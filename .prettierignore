@@ -1,0 +1,22 @@
+# Add files here to ignore them from prettier formatting
+/dist
+build/
+/coverage
+/.nx/cache
+/.nx/workspace-data
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Projects to ignore
+apps/api/**
+libs/api-types/**
+
+# IDE
+.vscode/
+.idea/
+
+# Other
+coverage/
+.cache/
