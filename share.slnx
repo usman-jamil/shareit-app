@@ -1,6 +1,16 @@
 <Solution>
-  <Folder Name="/apps/" />
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
   <Folder Name="/apps/api/">
     <Project Path="apps/api/Api.csproj" />
+  </Folder>
+  <Folder Name="/libs/">
+    <Project Path="libs/application/Application.csproj" />
+    <Project Path="libs/domain/Domain.csproj" />
+    <Project Path="libs/infrastructure/Infrastructure.csproj" />
+    <Project Path="libs/shared-kernal/SharedKernel.csproj" />
   </Folder>
 </Solution>
