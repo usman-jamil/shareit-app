@@ -49,22 +49,22 @@ internal static class ValidationDecorator
         TCommand command,
         IEnumerable<IValidator<TCommand>> validators)
     {
-      IEnumerable<IValidator<TCommand>> enumerable = validators.ToList();
-      if (!enumerable.Any())
-      {
-          return [];
-      }
+        IEnumerable<IValidator<TCommand>> enumerable = validators.ToList();
+        if (!enumerable.Any())
+        {
+            return [];
+        }
 
-      var context = new ValidationContext<TCommand>(command);
+        var context = new ValidationContext<TCommand>(command);
 
-      ValidationResult[] validationResults = await Task.WhenAll(
-          enumerable.Select(validator => validator.ValidateAsync(context)));
+        ValidationResult[] validationResults = await Task.WhenAll(
+            enumerable.Select(validator => validator.ValidateAsync(context)));
 
-      ValidationFailure[] validationFailures = [.. validationResults
+        ValidationFailure[] validationFailures = [.. validationResults
           .Where(validationResult => !validationResult.IsValid)
           .SelectMany(validationResult => validationResult.Errors)];
 
-      return validationFailures;
+        return validationFailures;
     }
 
     private static ValidationError CreateValidationError(ValidationFailure[] validationFailures) =>

@@ -2,19 +2,19 @@ namespace Application.Files.GetById;
 
 public class FileResponse
 {
-  public Guid Id { get; set; }
+    public Guid Id { get; set; }
 
-  public Guid ShareId { get; set; }
+    public Guid ShareId { get; set; }
 
-  public string RelativePath { get; set; }
+    public string RelativePath { get; set; }
 
-  public string Sha256 { get; set; }
+    public string Sha256 { get; set; }
 
-  public string? ContentType { get; set; }
+    public string? ContentType { get; set; }
 
-  public DateTime CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 
-  public DateTime UpdatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
-  public int Size { get; set; }
+    public int Size { get; set; }
 }

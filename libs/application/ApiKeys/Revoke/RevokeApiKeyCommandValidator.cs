@@ -4,8 +4,8 @@ namespace Application.ApiKeys.Revoke;
 
 internal sealed class RevokeApiKeyCommandValidator : AbstractValidator<RevokeApiKeyCommand>
 {
-  public RevokeApiKeyCommandValidator()
-  {
-    RuleFor(c => c.ApiKeyId).NotEmpty();
-  }
+    public RevokeApiKeyCommandValidator()
+    {
+        RuleFor(c => c.ApiKeyId).NotEmpty();
+    }
 }

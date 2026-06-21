@@ -7,6 +7,9 @@
   <Folder Name="/apps/api/">
     <Project Path="apps/api/Api.csproj" />
   </Folder>
+  <Folder Name="/apps/cli/">
+    <Project Path="apps/cli/Cli.csproj" />
+  </Folder>
   <Folder Name="/libs/">
     <Project Path="libs/application/Application.csproj" />
     <Project Path="libs/domain/Domain.csproj" />
