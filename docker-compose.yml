@@ -1,13 +1,13 @@
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:18
     container_name: postgres
     environment:
       - POSTGRES_DB=share
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
     volumes:
-      - ./.containers/db:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     ports:
       - 5432:5432
 
@@ -18,3 +18,6 @@ services:
       - ACCEPT_EULA=Y
     ports:
       - 8081:80
+
+volumes:
+  postgres_data:

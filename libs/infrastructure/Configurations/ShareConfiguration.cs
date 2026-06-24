@@ -24,10 +24,10 @@ public class ShareConfiguration : IEntityTypeConfiguration<Share>
         builder.HasMany<Domain.Files.File>()
             .WithOne()
             .HasForeignKey(t => t.ShareId);
-        
+
         builder.HasIndex(t => t.ExpiresAt)
             .HasDatabaseName("ix_shares_expires_at");
-        
+
         builder.HasIndex(t => t.OwnerUserId)
             .HasDatabaseName("ix_shares_owner_user_id");
     }

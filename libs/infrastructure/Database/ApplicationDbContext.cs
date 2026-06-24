@@ -1,7 +1,7 @@
 using Application.Abstractions.Data;
-using Domain.Users;
-using Domain.Shares;
 using Domain.ApiKeys;
+using Domain.Shares;
+using Domain.Users;
 using Infrastructure.DomainEvents;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
@@ -17,9 +17,9 @@ public sealed class ApplicationDbContext(
     public DbSet<User> Users { get; set; }
 
     public DbSet<ApiKey> ApiKeys { get; set; }
-    
+
     public DbSet<Domain.Files.File> Files { get; set; }
-    
+
     public DbSet<Share> Shares { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

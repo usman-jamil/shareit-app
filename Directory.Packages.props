@@ -4,8 +4,22 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Static code analysis -->
+    <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
+    <PackageVersion Include="ConsoleAppFramework.Abstractions" Version="5.7.13" />
     <PackageVersion Include="Microsoft.AspNetCore.Http" Version="2.3.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0-preview.5.26302.115" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageVersion Include="Serilog.Enrichers.Context" Version="4.6.5" />
+    <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageVersion Include="Serilog.Enrichers.Process" Version="3.0.0" />
+    <PackageVersion Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Serilog.Sinks.Async" Version="2.1.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.24.0.138807" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.9" />

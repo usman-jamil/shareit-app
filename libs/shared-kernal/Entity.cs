@@ -5,7 +5,7 @@ public abstract class Entity(Guid id)
     private readonly List<IDomainEvent> _domainEvents = [];
 
     public List<IDomainEvent> DomainEvents => [.. _domainEvents];
-    
+
     protected Entity() : this(Guid.NewGuid())
     {
     }

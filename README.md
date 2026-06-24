@@ -396,3 +396,13 @@ The pending state exists only for newly-created shares before their first finali
 - **Multi-revision history per share** — out of scope; this isn't git.
 - **Quotas across all shares per user** — only per-share for v1.
 - **Webhooks on share access** — deferred.
+
+# Running Migrations
+
+```bash
+# On the root directory generate migrations if needed
+dotnet ef migrations add Initial --project libs/infrastructure --startup-project apps/cli
+
+# Apply the migrations
+dotnet ef database update --project libs/infrastructure --startup-project apps/cli
+```

@@ -30,7 +30,7 @@ public static class DependencyInjection
             .AddHealthChecks(configuration)
             .AddAuthenticationInternal()
             .AddAuthorizationInternal();
-    
+
     private static IServiceCollection AddServices(this IServiceCollection services)
     {
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
@@ -39,7 +39,7 @@ public static class DependencyInjection
 
         return services;
     }
-    
+
     private static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
         string? connectionString = configuration.GetConnectionString("Database") ??
@@ -52,7 +52,7 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention());
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
-        
+
         services.AddScoped<IUserRepository, UserRepository>();
 
         services.AddScoped<IFileRepository, FileRepository>();
@@ -68,7 +68,7 @@ public static class DependencyInjection
 
         return services;
     }
-    
+
     private static IServiceCollection AddHealthChecks(this IServiceCollection services, IConfiguration configuration)
     {
         services
@@ -77,7 +77,7 @@ public static class DependencyInjection
 
         return services;
     }
-    
+
     private static IServiceCollection AddAuthenticationInternal(
         this IServiceCollection services)
     {
@@ -87,7 +87,7 @@ public static class DependencyInjection
 
         return services;
     }
-    
+
     private static IServiceCollection AddAuthorizationInternal(this IServiceCollection services)
     {
         services.AddAuthorization();
