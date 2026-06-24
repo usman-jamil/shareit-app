@@ -3,9 +3,11 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "targets": {
-    "serve": {
-      "command": "dotnet run --project apps/cli --launch-profile migrate",
-      "continuous": true
+    "migrate": {
+      "command": "dotnet run --launch-profile migrate",
+      "options": {
+        "cwd": "apps/cli"
+      }
     },
     "build": {
       "command": "dotnet build apps/cli/Cli.csproj -c Release"

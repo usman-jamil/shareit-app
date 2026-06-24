@@ -10,7 +10,7 @@ namespace Cli.Commands;
 public class DatabaseCommands(ILogger<DatabaseCommands> logger, IServiceProvider serviceProvider)
 {
     [Command("apply-migration")]
-    public async Task ApplyMigrations(string email, string firstName, string lastName)
+    public async Task ApplyMigrations()
     {
         logger.LogInformation("Applying migrations");
         using IServiceScope scope = serviceProvider.CreateScope();
