@@ -1,0 +1,27 @@
+{
+  "name": "infrastructure",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "targets": {
+    "compose-up": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "docker compose -f docker-compose.yml up -d --wait --wait-timeout 120",
+        "parallel": false,
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "compose-down": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "docker compose -f docker-compose.yml down",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "command": "dotnet build libs/infrastructure/Infrastructure.csproj -c Release"
+    }
+  }
+}

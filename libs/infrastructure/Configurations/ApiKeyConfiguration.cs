@@ -20,5 +20,8 @@ public class ApiKeyConfiguration : IEntityTypeConfiguration<ApiKey>
         builder.HasOne<User>()
             .WithMany()
             .HasForeignKey(t => t.UserId);
+        
+        builder.HasIndex(t => t.KeyId).IsUnique()
+            .HasDatabaseName("ix_api_keys_key_id");
     }
 }

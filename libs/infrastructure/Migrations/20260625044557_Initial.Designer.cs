@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260624033956_Initial")]
+    [Migration("20260625044557_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -42,6 +42,11 @@ namespace Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("key_hash");
 
+                    b.Property<string>("KeyId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key_id");
+
                     b.Property<string>("Label")
                         .HasColumnType("text")
                         .HasColumnName("label");
@@ -65,6 +70,10 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_api_keys");
+
+                    b.HasIndex("KeyId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_api_keys_key_id");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_api_keys_user_id");

@@ -10,25 +10,33 @@ namespace Application.ApiKeys.Revoke;
 internal sealed class RevokeApiKeyCommandHandler(
     IApplicationDbContext context,
     IDateTimeProvider dateTimeProvider,
-    IUserContext userContext)
+    IApiKeyHasher hasher)
     : ICommandHandler<RevokeApiKeyCommand>
 {
     public async Task<Result> Handle(RevokeApiKeyCommand command, CancellationToken cancellationToken)
     {
-        ApiKey? apiKey = await context.ApiKeys
-            .SingleOrDefaultAsync(t => t.Id == command.ApiKeyId && t.UserId == userContext.UserId, cancellationToken);
-
-        if (apiKey is null)
+        string[] parts = command.ApiKey.Split('_', 3);
+        if (parts.Length != 3 || parts[0] != hasher.KeyPrefix)
         {
-            return Result.Failure(ApiKeyErrors.NotFound(command.ApiKeyId));
+            return Result.Failure(ApiKeyErrors.NotFound(command.ApiKey));
+        }
+        
+        string keyId  = parts[1];
+
+        ApiKey? row = await context.ApiKeys
+            .SingleOrDefaultAsync(k => k.KeyId == keyId, cancellationToken);
+
+        if (row is null)
+        {
+            return Result.Failure(ApiKeyErrors.NotFound(command.ApiKey));
         }
 
-        if (apiKey.RevokedAt != null)
+        if (row.RevokedAt != null)
         {
-            return Result.Failure(ApiKeyErrors.AlreadyRevoked(command.ApiKeyId));
+            return Result.Failure(ApiKeyErrors.AlreadyRevoked(command.ApiKey));
         }
 
-        apiKey.RevokedAt = dateTimeProvider.UtcNow;
+        row.RevokedAt = dateTimeProvider.UtcNow;
 
         await context.SaveChangesAsync(cancellationToken);
 

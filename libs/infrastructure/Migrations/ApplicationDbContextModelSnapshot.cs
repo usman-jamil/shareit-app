@@ -39,6 +39,11 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 .HasColumnType("text")
                 .HasColumnName("key_hash");
 
+            b.Property<string>("KeyId")
+                .IsRequired()
+                .HasColumnType("text")
+                .HasColumnName("key_id");
+
             b.Property<string>("Label")
                 .HasColumnType("text")
                 .HasColumnName("label");
@@ -62,6 +67,10 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
 
             b.HasKey("Id")
                 .HasName("pk_api_keys");
+
+            b.HasIndex("KeyId")
+                .IsUnique()
+                .HasDatabaseName("ix_api_keys_key_id");
 
             b.HasIndex("UserId")
                 .HasDatabaseName("ix_api_keys_user_id");

@@ -1,0 +1,10 @@
+{
+  "name": "application",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "command": "dotnet build libs/application/Application.csproj -c Release"
+    }
+  }
+}

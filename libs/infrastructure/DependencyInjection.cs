@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SharedKernel;
 
 namespace Infrastructure;
@@ -28,7 +29,7 @@ public static class DependencyInjection
             .AddServices()
             .AddPersistence(configuration)
             .AddHealthChecks(configuration)
-            .AddAuthenticationInternal()
+            .AddAuthenticationInternal(configuration)
             .AddAuthorizationInternal();
 
     private static IServiceCollection AddServices(this IServiceCollection services)
@@ -79,10 +80,18 @@ public static class DependencyInjection
     }
 
     private static IServiceCollection AddAuthenticationInternal(
-        this IServiceCollection services)
+        this IServiceCollection services, IConfiguration configuration)
     {
-
+        services.Configure<ApiKeyOptions>(configuration.GetSection(ApiKeyOptions.SectionName));
+        
         services.AddHttpContextAccessor();
+        // Store ApiKey:Pepper in user secrets
+        services.AddSingleton<IApiKeyHasher>(sp =>
+        {
+            ApiKeyOptions opts = sp.GetRequiredService<IOptions<ApiKeyOptions>>().Value;
+            byte[] pepper = Convert.FromBase64String(opts.Pepper);
+            return new ApiKeyHasher(pepper);
+        });
         services.AddScoped<IUserContext, UserContext>();
 
         return services;

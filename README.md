@@ -397,6 +397,15 @@ The pending state exists only for newly-created shares before their first finali
 - **Quotas across all shares per user** — only per-share for v1.
 - **Webhooks on share access** — deferred.
 
+# User Secrets
+
+```bash
+cd apps/cli
+dotnet user-secrets init
+dotnet user-secrets set "ApiKey:Pepper" "$(openssl rand -base64 32)"
+dotnet user-secrets set "ConnectionStrings:Database" "Host=localhost;Port=5432;Database=share;Username=postgres;Password=postgres"
+```
+
 # Running Migrations
 
 ```bash

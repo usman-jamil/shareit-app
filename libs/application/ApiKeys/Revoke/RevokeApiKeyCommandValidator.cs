@@ -6,6 +6,6 @@ internal sealed class RevokeApiKeyCommandValidator : AbstractValidator<RevokeApi
 {
     public RevokeApiKeyCommandValidator()
     {
-        RuleFor(c => c.ApiKeyId).NotEmpty();
+        RuleFor(c => c.ApiKey).NotEmpty();
     }
 }

@@ -7,6 +7,34 @@
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }
+    },
+    "userCreate": {
+      "commandName": "Project",
+      "commandLineArgs": "create-user --name \"Usman Jamil\" --email musman.bhatti@gmail.com",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "createApiKey": {
+      "commandName": "Project",
+      "commandLineArgs": "create-api-key --user-id f5d4c7a7-fe57-4a71-a0c9-bf8f98c63a8a",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "validateApiKey": {
+      "commandName": "Project",
+      "commandLineArgs": "validate-api-key --api-key share_F1C8A847C672DDBC_BFD3B7CF53171CEFD2566985154280E64755272B2EF8E2E4D8A81465F12483DC",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "dropDatabase": {
+      "commandName": "Project",
+      "commandLineArgs": "drop-database",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
     }
   }
 }

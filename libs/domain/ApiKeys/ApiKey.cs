@@ -6,6 +6,8 @@ public class ApiKey : Entity
 {
     public Guid UserId { get; set; }
 
+    public string KeyId { get; set; }
+    
     public string KeyHash { get; set; }
 
     public string Prefix { get; set; }

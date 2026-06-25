@@ -1,0 +1,10 @@
+{
+  "name": "shared-kernel",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "command": "dotnet build libs/shared-kernal/SharedKernel.csproj -c Release"
+    }
+  }
+}

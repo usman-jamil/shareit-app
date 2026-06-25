@@ -1,4 +1,4 @@
-namespace Application.ApiKeys.GetById;
+namespace Application.ApiKeys.Get;
 
 public class ApiKeyResponse
 {
