@@ -5,7 +5,7 @@ public sealed class CreateApiKeyResponse
     public Guid Id { get; set; }
 
     public Guid UserId { get; set; }
-    
+
     public string KeyId { get; set; }
 
     public string Prefix { get; set; }

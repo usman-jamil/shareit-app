@@ -18,7 +18,7 @@ public class UserCommands(ILogger<UserCommands> logger, IServiceProvider service
         var userCommand = new CreateUserCommand(
             name,
             email);
-        
+
         Result<Guid> result = await handler.Handle(userCommand, CancellationToken.None);
         logger.LogInformation("User Created: {Result}", result.Value.ToString());
     }

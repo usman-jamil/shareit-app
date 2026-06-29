@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" />
+    <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Abstractions" />
     <PackageReference Include="Microsoft.AspNetCore.Authorization.Policy" />

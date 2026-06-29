@@ -17,7 +17,7 @@
     },
     "createApiKey": {
       "commandName": "Project",
-      "commandLineArgs": "create-api-key --user-id f5d4c7a7-fe57-4a71-a0c9-bf8f98c63a8a",
+      "commandLineArgs": "create-api-key --user-id 6db281c4-9342-43ca-9eda-1dcc3e37e579",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }

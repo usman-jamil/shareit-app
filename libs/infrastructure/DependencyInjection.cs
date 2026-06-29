@@ -1,3 +1,5 @@
+using Amazon.Runtime;
+using Amazon.S3;
 using Application.Abstractions.Authentication;
 using Application.Abstractions.Data;
 using Domain.ApiKeys;
@@ -9,6 +11,7 @@ using Infrastructure.Authorization;
 using Infrastructure.Database;
 using Infrastructure.DomainEvents;
 using Infrastructure.Repositories;
+using Infrastructure.Storage;
 using Infrastructure.Time;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +32,7 @@ public static class DependencyInjection
             .AddServices()
             .AddPersistence(configuration)
             .AddHealthChecks(configuration)
+            .AddStorage(configuration)
             .AddAuthenticationInternal(configuration)
             .AddAuthorizationInternal();
 
@@ -79,11 +83,33 @@ public static class DependencyInjection
         return services;
     }
 
+    private static IServiceCollection AddStorage(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.AddSingleton<IAmazonS3>(sp =>
+        {
+            StorageOptions opts = sp.GetRequiredService<IOptions<StorageOptions>>().Value;
+            return new AmazonS3Client(
+                new BasicAWSCredentials(opts.AccessKeyId, opts.SecretAccessKey),
+                new AmazonS3Config
+                {
+                    ServiceURL = opts.ServiceUrl
+                });
+        });
+        // Store Storage:AccessKeyId in user secrets
+        // Store Storage:SecretAccessKey in user secrets
+        // Store Storage:ServiceUrl in user secrets
+        services.AddSingleton<IStorageService, R2StorageService>();
+
+        return services;
+    }
+
     private static IServiceCollection AddAuthenticationInternal(
         this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<ApiKeyOptions>(configuration.GetSection(ApiKeyOptions.SectionName));
-        
+
         services.AddHttpContextAccessor();
         // Store ApiKey:Pepper in user secrets
         services.AddSingleton<IApiKeyHasher>(sp =>
@@ -99,10 +125,7 @@ public static class DependencyInjection
 
     private static IServiceCollection AddAuthorizationInternal(this IServiceCollection services)
     {
-        services.AddAuthorization();
-
         services.AddTransient<IAuthorizationHandler, ApiKeyAuthorizationHandler>();
-
         services.AddTransient<IAuthorizationPolicyProvider, ApiKeyAuthorizationPolicyProvider>();
 
         return services;

@@ -18,7 +18,7 @@ public class ApiKeyAuthorizationPolicyProvider(IOptions<AuthorizationOptions> op
         }
 
         AuthorizationPolicy permissionPolicy = new AuthorizationPolicyBuilder()
-            .AddRequirements(new ApiKeyRequirement())
+            .AddRequirements(new ApiKeyRequirement(policyName))
             .Build();
 
         _authorizationOptions.AddPolicy(policyName, permissionPolicy);

@@ -20,8 +20,8 @@ internal sealed class RevokeApiKeyCommandHandler(
         {
             return Result.Failure(ApiKeyErrors.NotFound(command.ApiKey));
         }
-        
-        string keyId  = parts[1];
+
+        string keyId = parts[1];
 
         ApiKey? row = await context.ApiKeys
             .SingleOrDefaultAsync(k => k.KeyId == keyId, cancellationToken);

@@ -19,7 +19,7 @@ public class DatabaseCommands(ILogger<DatabaseCommands> logger, IServiceProvider
 
         await dbContext.Database.MigrateAsync();
     }
-    
+
     [Command("drop-database")]
     public async Task DropDatabase()
     {

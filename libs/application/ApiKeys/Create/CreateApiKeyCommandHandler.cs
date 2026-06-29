@@ -25,17 +25,17 @@ internal sealed class CreateApiKeyCommandHandler(
         {
             return Result.Failure<CreateApiKeyResponse>(UserErrors.NotFound(command.UserId));
         }
-        
+
         // Public, non-secret lookup id. Indexed, unique, stored in plaintext.
         string keyId = apiKeyHasher.KeyId;
 
         // Secret: 256 bits. Returned to the caller once, never stored.
         byte[] secretBytes = RandomNumberGenerator.GetBytes(32);
         string secret = Convert.ToHexString(secretBytes);
-        
+
         // Full key the caller sends: share_<keyId>_<secret>
         string plaintextKey = $"{apiKeyHasher.KeyPrefix}_{keyId}_{secret}";
-        
+
         // Hash ONLY the secret. Lookup is by keyId, not by hash.
         string keyHash = apiKeyHasher.Hash(secret);
 

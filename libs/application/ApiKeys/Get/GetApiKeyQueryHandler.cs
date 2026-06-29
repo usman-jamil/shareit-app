@@ -17,8 +17,8 @@ internal sealed class GetApiKeyQueryHandler(IApplicationDbContext context, IApiK
         {
             return Result.Failure<ApiKeyResponse>(ApiKeyErrors.NotFound(query.ApiKey));
         }
-        
-        string keyId  = parts[1];
+
+        string keyId = parts[1];
         string secret = parts[2];
 
         ApiKey? row = await context.ApiKeys

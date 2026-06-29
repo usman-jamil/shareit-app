@@ -65,9 +65,7 @@
   },
   "targetDefaults": {
     "serve": {
-      "dependsOn": [
-        { "projects": ["infrastructure"], "target": "compose-up" }
-      ]
+      "dependsOn": [{ "projects": ["infrastructure"], "target": "compose-up" }]
     }
   }
 }

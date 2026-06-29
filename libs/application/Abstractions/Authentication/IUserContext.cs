@@ -4,5 +4,7 @@ public interface IUserContext
 {
     Guid UserId { get; }
 
-    Guid ApiKey { get; }
+    string ApiKey { get; }
+
+    CancellationToken CancellationToken { get; }
 }

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using Application.Abstractions.Authentication;
 using System.Text;
+using Application.Abstractions.Authentication;
 
 
 namespace Infrastructure.Authentication;
@@ -23,7 +23,7 @@ internal sealed class ApiKeyHasher(byte[] pepper) : IApiKeyHasher
 
         return CryptographicOperations.FixedTimeEquals(expected, actual);
     }
-    
+
     public string KeyId =>
         // 8 random bytes -> 16 hex chars. Collision-resistant; hex keeps it delimiter-safe.
         Convert.ToHexString(RandomNumberGenerator.GetBytes(8));

@@ -12,12 +12,17 @@ services:
       - 5432:5432
 
   seq:
-    image: datalust/seq:2024.3
+    image: datalust/seq:latest
     container_name: seq
     environment:
       - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_NOAUTHENTICATION=true
+    volumes:
+      - seq_data:/data
     ports:
       - 8081:80
+      - 5341:5341
 
 volumes:
   postgres_data:
+  seq_data:

@@ -152,17 +152,17 @@ Server-side:
 5. Insert `files` rows for every file in the request.
 6. For each file, generate a short-lived (e.g. 1-hour) presigned PUT URL targeting `<share_id>/<relative_path>` on R2. Include `Content-Length` and `x-amz-content-sha256` headers in the signature so R2 enforces integrity on upload.
 7. Return:
-    
-    ```json
-    {
-      "share_id": "abc123",
-      "share_url": "https://share.teamfullstack.io/s/abc123",
-      "expires_at": 1735000000,
-      "uploads": [
-        { "relative_path": "src/main.rs", "url": "https://r2.../...", "headers": { ... } }
-      ]
-    }
-    ```
+
+   ```json
+   {
+     "share_id": "abc123",
+     "share_url": "https://share.teamfullstack.io/s/abc123",
+     "expires_at": 1735000000,
+     "uploads": [
+       { "relative_path": "src/main.rs", "url": "https://r2.../...", "headers": { ... } }
+     ]
+   }
+   ```
 
 #### Step 3: CLI uploads files directly to R2
 
@@ -192,8 +192,8 @@ push sends a full state snapshot. The server diffs against current state and tel
 
 - Walks the directory.
 - For each file: compare to local SQLite `files` table.
-    - If size + mtime match the stored row → use the cached sha256 (skip hashing).
-    - Otherwise → re-hash.
+  - If size + mtime match the stored row → use the cached sha256 (skip hashing).
+  - Otherwise → re-hash.
 - Result: an authoritative list of `(relative_path, size, sha256)` for the current state.
 
 #### Step 2: CLI calls PUT /api/shares/:id/state
@@ -213,21 +213,20 @@ Server-side:
 
 1. Authenticate; verify caller owns the share.
 2. Diff client state against `files` table for this share:
-    - **Uploads needed**: files where client's sha256 differs from server's, or where the file doesn't exist on the server yet.
-    - **Deletes pending**: server-side files not in the client's list.
+   - **Uploads needed**: files where client's sha256 differs from server's, or where the file doesn't exist on the server yet.
+   - **Deletes pending**: server-side files not in the client's list.
 3. **Safety check**: if `deletes_pending.length > max(5, file_count * 0.5)`, return a `409 Confirm Required` with the diff summary. CLI re-sends with `?confirm=true` after user approval. This is the "oh no I cd'd into the wrong folder" guard.
 4. If accepted, generate presigned PUT URLs for the uploads (same as Path A, step 2).
 5. Return:
-    
-    ```json
-    {
-      "push_id": "p_xyz",
-      "uploads": [...],
-      "deletes_count": 3,
-      "unchanged_count": 42
-    }
-    ```
-    
+
+   ```json
+   {
+     "push_id": "p_xyz",
+     "uploads": [...],
+     "deletes_count": 3,
+     "unchanged_count": 42
+   }
+   ```
 
 The server does NOT update Turso yet. Current state is preserved; downloads of the existing share continue to work normally during the push.
 
@@ -264,16 +263,16 @@ Mark `last_pushed_at = now()`, update cached file rows. Local state is now in sy
 
 ## Failure modes during upload
 
-| Failure | What happens |
-| --- | --- |
-| CLI crashes mid-upload (initial share) | Share stays `pending`; cleaner expires it after TTL. |
-| CLI crashes mid-upload (push) | Some R2 objects updated, Turso unchanged. Share remains usable with old metadata; next `push` self-heals (will re-detect what needs updating). |
-| R2 PUT returns 5xx | CLI retries with backoff per file. After max retries, surfaces error and exits without finalize. |
-| Presigned URL expires before upload | Rare with 1-hour expiry. CLI surfaces error; user re-runs. Future enhancement: refresh URLs from the API mid-push. |
-| sha256 mismatch on R2 PUT | R2 rejects with 400. CLI surfaces error; user investigates (likely a file mutated mid-push). |
-| Network drops during finalize | Finalize is idempotent on `share_id + push_id`. CLI retries safely. |
-| User runs `push` from a subdirectory | CLI walks up looking for `.shareit/config.toml`; errors if not found. Won't accidentally create a new share. |
-| User pushes from a folder where 90% of files are deleted | Server returns 409 with diff summary; CLI prompts for confirmation. |
+| Failure                                                  | What happens                                                                                                                                   |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI crashes mid-upload (initial share)                   | Share stays `pending`; cleaner expires it after TTL.                                                                                           |
+| CLI crashes mid-upload (push)                            | Some R2 objects updated, Turso unchanged. Share remains usable with old metadata; next `push` self-heals (will re-detect what needs updating). |
+| R2 PUT returns 5xx                                       | CLI retries with backoff per file. After max retries, surfaces error and exits without finalize.                                               |
+| Presigned URL expires before upload                      | Rare with 1-hour expiry. CLI surfaces error; user re-runs. Future enhancement: refresh URLs from the API mid-push.                             |
+| sha256 mismatch on R2 PUT                                | R2 rejects with 400. CLI surfaces error; user investigates (likely a file mutated mid-push).                                                   |
+| Network drops during finalize                            | Finalize is idempotent on `share_id + push_id`. CLI retries safely.                                                                            |
+| User runs `push` from a subdirectory                     | CLI walks up looking for `.shareit/config.toml`; errors if not found. Won't accidentally create a new share.                                   |
+| User pushes from a folder where 90% of files are deleted | Server returns 409 with diff summary; CLI prompts for confirmation.                                                                            |
 
 ## Download flow — in detail
 
@@ -316,8 +315,8 @@ The download endpoint:
 2. Looks up the file row; if not found, returns 404.
 3. Generates a short-lived (5-15 minute) presigned GET URL for `<share_id>/<relative_path>` on R2.
 4. Sets response headers:
-    - `Content-Disposition: attachment; filename="main.rs"` for risky content types (HTML, JS, SVG, etc.) to prevent inline rendering / phishing.
-    - For safer types (images, plain text, PDF), inline is acceptable.
+   - `Content-Disposition: attachment; filename="main.rs"` for risky content types (HTML, JS, SVG, etc.) to prevent inline rendering / phishing.
+   - For safer types (images, plain text, PDF), inline is acceptable.
 5. Returns 302 with `Location: <presigned URL>`.
 
 #### Step 5: Browser follows the redirect, downloads from R2 directly
@@ -345,13 +344,13 @@ Defer until someone asks for it.
 
 ### Failure modes during download
 
-| Failure | What happens |
-| --- | --- |
-| Share expired between page load and click | API returns 404 on the download endpoint; SPA shows a friendly error. |
+| Failure                                          | What happens                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Share expired between page load and click        | API returns 404 on the download endpoint; SPA shows a friendly error.                                                           |
 | Presigned URL expires between redirect and fetch | Browser will show R2's error response. Mitigated by short presigned lifetime + immediate-follow by browsers (rare in practice). |
-| File deleted server-side (push removed it) | 404. |
-| R2 returns 5xx on actual fetch | Browser shows R2's response. API can't really do anything; this is a Cloudflare problem. |
-| Mass-downloading by viral share | NGINX rate limits on `/api/shares/:id/files/*` (per-IP). Bandwidth comes from R2 (zero-egress), so cost is bounded. |
+| File deleted server-side (push removed it)       | 404.                                                                                                                            |
+| R2 returns 5xx on actual fetch                   | Browser shows R2's response. API can't really do anything; this is a Cloudflare problem.                                        |
+| Mass-downloading by viral share                  | NGINX rate limits on `/api/shares/:id/files/*` (per-IP). Bandwidth comes from R2 (zero-egress), so cost is bounded.             |
 
 ## Share lifecycle
 
@@ -359,16 +358,16 @@ The pending state exists only for newly-created shares before their first finali
 
 # API surface (v1)
 
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/shares` | API key | Create new share. Returns share_id, presigned upload URLs, share_url. |
-| PUT | `/api/shares/:id/state` | API key (owner) | Submit new full state for an existing share. Returns push_id + uploads needed + deletes pending. |
-| POST | `/api/shares/:id/finalize` | API key (owner) | Commit a pending share (initial) or a pending push (update). |
-| GET | `/api/shares/:id` | — | Public. Share metadata + file list. 404 if not ready or expired. |
-| GET | `/api/shares/:id/files/*` | — | Public. 302 to presigned R2 GET URL. 404 if not ready/expired/missing. |
-| DELETE | `/api/shares/:id` | API key (owner) | Mark expired immediately. |
-| GET | `/api/shares/mine` | API key | List the caller's active shares. |
-| GET | `/api/me` | API key | Echo caller identity. Useful for CLI debugging. |
+| Method | Path                       | Auth            | Purpose                                                                                          |
+| ------ | -------------------------- | --------------- | ------------------------------------------------------------------------------------------------ |
+| POST   | `/api/shares`              | API key         | Create new share. Returns share_id, presigned upload URLs, share_url.                            |
+| PUT    | `/api/shares/:id/state`    | API key (owner) | Submit new full state for an existing share. Returns push_id + uploads needed + deletes pending. |
+| POST   | `/api/shares/:id/finalize` | API key (owner) | Commit a pending share (initial) or a pending push (update).                                     |
+| GET    | `/api/shares/:id`          | —               | Public. Share metadata + file list. 404 if not ready or expired.                                 |
+| GET    | `/api/shares/:id/files/*`  | —               | Public. 302 to presigned R2 GET URL. 404 if not ready/expired/missing.                           |
+| DELETE | `/api/shares/:id`          | API key (owner) | Mark expired immediately.                                                                        |
+| GET    | `/api/shares/mine`         | API key         | List the caller's active shares.                                                                 |
+| GET    | `/api/me`                  | API key         | Echo caller identity. Useful for CLI debugging.                                                  |
 
 ## Limits (v1, configurable)
 
@@ -378,32 +377,31 @@ The pending state exists only for newly-created shares before their first finali
 - Active shares per user: ≤ 10.
 - Per-file path: no `..`, no absolute, no null bytes, ≤ 1024 chars.
 
-# Security and abuse considerations
-
-- **API keys**: SHA-256-hashed at rest. Raw key shown once at issuance, never recoverable. Per-key revocation. Prefix-prefixed format (`shareit_live_*`) for easy log grepping and GitHub secret scanning compatibility.
-- **Path traversal**: validated at every boundary (CLI, API, R2 path construction).
-- **Content-Disposition**: forced `attachment` for risky MIME types on the download redirect to prevent phishing via `share.teamfullstack.io/api/.../evil.html`.
-- **Rate limiting**: NGINX `limit_req` on `/api/shares` POST and `/api/shares/*/files/*` GET.
-- **Admin nuke endpoint**: authenticated admin-only (a flag on the user row) endpoint to revoke any share by ID, regardless of owner. For takedowns.
-- **Audit**: API logs every request with caller key prefix, share ID, action. Plain `pino` to stdout, journald handles the rest.
-
-# Open questions / parked decisions
-
-- **Atomic-revision update semantics** (Option B from the v5 discussion) — staged uploads to a different R2 prefix, copy-swap on finalize. Cleaner but expensive. Parked unless torn-state windows become a real complaint.
-- **Browser uploads / drag-and-drop SPA** — would require login flow for the SPA; out of scope for v1.
-- **Single-download / one-time-link shares** — interesting UX, deferred.
-- **Password-protected shares** — straightforward addition, deferred.
-- **Multi-revision history per share** — out of scope; this isn't git.
-- **Quotas across all shares per user** — only per-share for v1.
-- **Webhooks on share access** — deferred.
-
 # User Secrets
 
 ```bash
+PEPPER="$(openssl rand -base64 32)"
+R2_ACCESS_KEY_ID=""
+R2_SECRET_ACCESS_KEY=""
+R2_SERVICE_URL=""
+R2_BUCKET_NAME="shareit-blobs"
 cd apps/cli
 dotnet user-secrets init
-dotnet user-secrets set "ApiKey:Pepper" "$(openssl rand -base64 32)"
+dotnet user-secrets set "ApiKey:Pepper" "$PEPPER"
 dotnet user-secrets set "ConnectionStrings:Database" "Host=localhost;Port=5432;Database=share;Username=postgres;Password=postgres"
+dotnet user-secrets set "Storage:AccessKeyId" "$R2_ACCESS_KEY_ID"
+dotnet user-secrets set "Storage:SecretAccessKey" "$R2_SECRET_ACCESS_KEY"
+dotnet user-secrets set "Storage:ServiceUrl" "$R2_SERVICE_URL"
+dotnet user-secrets set "Storage:BucketName" "$R2_BUCKET_NAME"
+
+cd apps/api
+dotnet user-secrets init
+dotnet user-secrets set "ApiKey:Pepper" "$PEPPER"
+dotnet user-secrets set "ConnectionStrings:Database" "Host=localhost;Port=5432;Database=share;Username=postgres;Password=postgres"
+dotnet user-secrets set "Storage:AccessKeyId" "$R2_ACCESS_KEY_ID"
+dotnet user-secrets set "Storage:SecretAccessKey" "$R2_SECRET_ACCESS_KEY"
+dotnet user-secrets set "Storage:ServiceUrl" "$R2_SERVICE_URL"
+dotnet user-secrets set "Storage:BucketName" "$R2_BUCKET_NAME"
 ```
 
 # Running Migrations
