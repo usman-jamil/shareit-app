@@ -23,7 +23,7 @@ Full history is in the Decisions Log. The headline calls:
 
 ## Data model
 
-### Server-side (Turso/PostGreSQL)
+### Server-side (PostGreSQL)
 
 ```sql
 CREATE TABLE users (
@@ -224,7 +224,7 @@ Server-side:
    }
    ```
 
-The server does NOT update Turso yet. Current state is preserved; downloads of the existing share continue to work normally during the push.
+The server does NOT update database yet. Current state is preserved; downloads of the existing share continue to work normally during the push.
 
 #### Step 3: CLI uploads changed files directly to R2
 
@@ -233,7 +233,7 @@ The server does NOT update Turso yet. Current state is preserved; downloads of t
 
 ##### A subtlety worth being explicit about
 
-There is a brief window during step 3 where R2 has new bytes for some files but Turso still has old metadata (size, content-type). Downloads during this window get the new bytes; their `Content-Length` may not match what the API previously reported. This is benign for normal browser/curl use. It does mean:
+There is a brief window during step 3 where R2 has new bytes for some files but database still has old metadata (size, content-type). Downloads during this window get the new bytes; their `Content-Length` may not match what the API previously reported. This is benign for normal browser/curl use. It does mean:
 
 - The download endpoint should not aggressively trust cached metadata for `Content-Length` if it can be avoided — let R2 set it on the redirect response. Or, accept the small inconsistency and document it.
 - After finalize, all metadata is correct.
@@ -244,7 +244,7 @@ This trade-off is deliberate: the alternative is staging uploads at separate R2 
 
 With the `push_id` from step 2.
 
-Server-side, in a single Turso transaction:
+Server-side, in a single database transaction:
 
 1. Authenticate; verify caller owns the share.
 2. HEAD-sample the newly-uploaded R2 objects.
@@ -262,7 +262,7 @@ Mark `last_pushed_at = now()`, update cached file rows. Local state is now in sy
 | Failure                                                  | What happens                                                                                                                                   |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | CLI crashes mid-upload (initial share)                   | Share stays `pending`; cleaner expires it after TTL.                                                                                           |
-| CLI crashes mid-upload (push)                            | Some R2 objects updated, Turso unchanged. Share remains usable with old metadata; next `push` self-heals (will re-detect what needs updating). |
+| CLI crashes mid-upload (push)                            | Some R2 objects updated, database unchanged. Share remains usable with old metadata; next `push` self-heals (will re-detect what needs updating). |
 | R2 PUT returns 5xx                                       | CLI retries with backoff per file. After max retries, surfaces error and exits without finalize.                                               |
 | Presigned URL expires before upload                      | Rare with 1-hour expiry. CLI surfaces error; user re-runs. Future enhancement: refresh URLs from the API mid-push.                             |
 | sha256 mismatch on R2 PUT                                | R2 rejects with 400. CLI surfaces error; user investigates (likely a file mutated mid-push).                                                   |
