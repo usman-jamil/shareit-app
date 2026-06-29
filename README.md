@@ -17,12 +17,8 @@ Full history is in the Decisions Log. The headline calls:
 
 - **Upload to VPS, not tunnel** — laptop can close, share stays alive.
 - **Cloudflare R2** — zero egress fees, S3-compatible API.
-- **Turso (libSQL)** — managed SQLite, no backup/durability ops on the VPS. Concurrent-write rate at team scale is well within Turso's serialized-writer model.
 - **API keys (not Auth0/Keycloak)** — invite-only team tool, ~10 users. Manual issuance with `key_hash` storage, `last_used_at`, revocation. Appropriate scale, no third-party auth dependency.
 - **Private R2 bucket, presigned downloads via API 302** — expiry honored exactly; no leak window. API stays out of the data path (it returns a redirect, not bytes).
-- **Next.js for API + SPA together** — one process, no CORS, simpler deploy.
-- **Rust CLI** — single static binary distribution, explicit learning goal. Distributed via GitHub Releases + hosted install script.
-- **Cleaner is a separate systemd service touching Turso only** — process isolation; R2 lifecycle handles blob cleanup as a self-healing backstop.
 - **CLI local state in SQLite** — diff semantics, share registry, per-file (path, size, mtime, sha256) tracking. Better than YAML for concurrent CLI invocations and indexed lookups.
 
 ## Data model
@@ -333,15 +329,6 @@ The `-L` flag is essential — it follows the 302 to R2. Without it, curl just s
 
 For scripts: `curl -L https://share.teamfullstack.io/api/shares/abc123/files/install.sh | bash` works because `-L` follows the redirect transparently.
 
-### "Download all as tar.gz" (Phase 6 / nice-to-have)
-
-Not in v1. When built, options are:
-
-- **Server-side tar streaming**: API streams R2 objects through a tar encoder and into the response. CPU and bandwidth cost on the VPS proportional to share size. Acceptable for small-to-medium shares.
-- **Client-side**: SPA fetches each file and zips in-browser via JS. Doesn't scale beyond a few hundred MB realistically.
-
-Defer until someone asks for it.
-
 ### Failure modes during download
 
 | Failure                                          | What happens                                                                                                                    |
@@ -408,8 +395,8 @@ dotnet user-secrets set "Storage:BucketName" "$R2_BUCKET_NAME"
 
 ```bash
 # On the root directory generate migrations if needed
-dotnet ef migrations add Initial --project libs/infrastructure --startup-project apps/cli
+dotnet ef migrations add Initial --project libs/infrastructure --startup-project apps/api
 
 # Apply the migrations
-dotnet ef database update --project libs/infrastructure --startup-project apps/cli
+dotnet ef database update --project libs/infrastructure --startup-project apps/api
 ```
