@@ -1,8 +1,8 @@
-using Application.Abstractions.Data;
+using Application.Exceptions;
 using Domain.ApiKeys;
 using Domain.Shares;
 using Domain.Users;
-using Infrastructure.DomainEvents;
+using Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using SharedKernel;
@@ -11,9 +11,14 @@ namespace Infrastructure.Database;
 
 public sealed class ApplicationDbContext(
     DbContextOptions<ApplicationDbContext> options,
-    IDomainEventsDispatcher domainEventsDispatcher)
-    : DbContext(options), IApplicationDbContext, IUnitOfWork
+    IDateTimeProvider dateTimeProvider)
+    : DbContext(options), IUnitOfWork
 {
+    private static readonly JsonSerializerSettings JsonSerializerSettings = new()
+    {
+        TypeNameHandling = TypeNameHandling.All
+    };
+    
     public DbSet<User> Users { get; set; }
 
     public DbSet<ApiKey> ApiKeys { get; set; }
@@ -41,22 +46,23 @@ public sealed class ApplicationDbContext(
         //     - eventual consistency
         //     - handlers can fail
 
-        List<IDomainEvent> domainEvents = ExtractDomainEvents();
-        int result = await base.SaveChangesAsync(cancellationToken);
+        try
+        {
+            AddDomainEventsAsOutboxMessages();
 
-        await PublishDomainEventsAsync(domainEvents);
+            int result = await base.SaveChangesAsync(cancellationToken);
 
-        return result;
+            return result;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyException("Concurrency exception occurred.", ex);
+        }
     }
 
-    private async Task PublishDomainEventsAsync(IEnumerable<IDomainEvent> domainEvents)
+    private void AddDomainEventsAsOutboxMessages()
     {
-        await domainEventsDispatcher.DispatchAsync(domainEvents);
-    }
-
-    private List<IDomainEvent> ExtractDomainEvents()
-    {
-        var domainEvents = ChangeTracker
+        var outboxMessages = ChangeTracker
             .Entries<Entity>()
             .Select(entry => entry.Entity)
             .SelectMany(entity =>
@@ -67,7 +73,13 @@ public sealed class ApplicationDbContext(
 
                 return domainEvents;
             })
+            .Select(domainEvent => new OutboxMessage(
+                Guid.NewGuid(),
+                dateTimeProvider.UtcNow,
+                domainEvent.GetType().Name,
+                JsonConvert.SerializeObject(domainEvent, JsonSerializerSettings)))
             .ToList();
-        return domainEvents;
+        
+        AddRange(outboxMessages);
     }
 }

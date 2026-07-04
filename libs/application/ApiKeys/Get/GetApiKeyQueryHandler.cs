@@ -7,7 +7,7 @@ using SharedKernel;
 
 namespace Application.ApiKeys.Get;
 
-internal sealed class GetApiKeyQueryHandler(IApplicationDbContext context, IApiKeyHasher hasher)
+internal sealed class GetApiKeyQueryHandler(IApiKeyRepository keyRepository, IApiKeyHasher hasher)
   : IQueryHandler<GetApiKeyQuery, ApiKeyResponse>
 {
     public async Task<Result<ApiKeyResponse>> Handle(GetApiKeyQuery query, CancellationToken cancellationToken)
@@ -21,8 +21,7 @@ internal sealed class GetApiKeyQueryHandler(IApplicationDbContext context, IApiK
         string keyId = parts[1];
         string secret = parts[2];
 
-        ApiKey? row = await context.ApiKeys
-            .SingleOrDefaultAsync(k => k.KeyId == keyId, cancellationToken);
+        ApiKey? row = await keyRepository.GetByKeyIdAsync(keyId, cancellationToken);
 
         if (row is null)
         {

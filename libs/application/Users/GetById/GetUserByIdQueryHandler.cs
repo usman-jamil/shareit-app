@@ -6,27 +6,26 @@ using SharedKernel;
 
 namespace Application.Users.GetById;
 
-internal sealed class GetUserByIdQueryHandler(IApplicationDbContext context)
+internal sealed class GetUserByIdQueryHandler(IUserRepository userRepository)
   : IQueryHandler<GetUserByIdQuery, UserResponse>
 {
     public async Task<Result<UserResponse>> Handle(GetUserByIdQuery query, CancellationToken cancellationToken)
     {
-        UserResponse? user = await context.Users
-          .Where(user => user.Id == query.UserId)
-          .Select(user => new UserResponse
-          {
-              Id = user.Id,
-              Name = user.Name,
-              Email = user.Email,
-              CreatedAt = user.CreatedAt
-          })
-          .SingleOrDefaultAsync(cancellationToken);
-
+        User? user = await userRepository.GetByIdAsync(query.UserId, cancellationToken);
+        
         if (user is null)
         {
             return Result.Failure<UserResponse>(UserErrors.NotFound(query.UserId));
         }
+        
+        var response = new UserResponse
+        {
+            Id = user.Id,
+            Name = user.Name,
+            Email = user.Email,
+            CreatedAt = user.CreatedAt
+        };
 
-        return user;
+        return response;
     }
 }

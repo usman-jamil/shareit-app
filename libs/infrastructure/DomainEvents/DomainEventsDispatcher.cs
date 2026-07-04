@@ -10,31 +10,28 @@ internal sealed class DomainEventsDispatcher(IServiceProvider serviceProvider) :
     private static readonly ConcurrentDictionary<Type, Type> WrapperTypeDictionary = new();
 
     public async Task DispatchAsync(
-        IEnumerable<IDomainEvent> domainEvents,
+        IDomainEvent domainEvent,
         CancellationToken cancellationToken = default)
     {
-        foreach (IDomainEvent domainEvent in domainEvents)
+        using IServiceScope scope = serviceProvider.CreateScope();
+
+        Type domainEventType = domainEvent.GetType();
+        Type handlerType = HandlerTypeDictionary.GetOrAdd(
+            domainEventType,
+            et => typeof(IDomainEventHandler<>).MakeGenericType(et));
+
+        IEnumerable<object?> handlers = scope.ServiceProvider.GetServices(handlerType);
+
+        foreach (object? handler in handlers)
         {
-            using IServiceScope scope = serviceProvider.CreateScope();
-
-            Type domainEventType = domainEvent.GetType();
-            Type handlerType = HandlerTypeDictionary.GetOrAdd(
-                domainEventType,
-                et => typeof(IDomainEventHandler<>).MakeGenericType(et));
-
-            IEnumerable<object?> handlers = scope.ServiceProvider.GetServices(handlerType);
-
-            foreach (object? handler in handlers)
+            if (handler is null)
             {
-                if (handler is null)
-                {
-                    continue;
-                }
-
-                var handlerWrapper = HandlerWrapper.Create(handler, domainEventType);
-
-                await handlerWrapper.Handle(domainEvent, cancellationToken);
+                continue;
             }
+
+            var handlerWrapper = HandlerWrapper.Create(handler, domainEventType);
+
+            await handlerWrapper.Handle(domainEvent, cancellationToken);
         }
     }
 

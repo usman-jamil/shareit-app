@@ -10,6 +10,7 @@ using Infrastructure.Authentication;
 using Infrastructure.Authorization;
 using Infrastructure.Database;
 using Infrastructure.DomainEvents;
+using Infrastructure.Outbox;
 using Infrastructure.Repositories;
 using Infrastructure.Storage;
 using Infrastructure.Time;
@@ -19,6 +20,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Quartz;
 using SharedKernel;
 
 namespace Infrastructure;
@@ -34,7 +36,8 @@ public static class DependencyInjection
             .AddHealthChecks(configuration)
             .AddStorage(configuration)
             .AddAuthenticationInternal(configuration)
-            .AddAuthorizationInternal();
+            .AddAuthorizationInternal()
+            .AddBackgroundJobs(configuration);
 
     private static IServiceCollection AddServices(this IServiceCollection services)
     {
@@ -56,7 +59,7 @@ public static class DependencyInjection
                     npgsqlOptions.MigrationsHistoryTable(HistoryRepository.DefaultTableName, Schemas.Default))
                 .UseSnakeCaseNamingConvention());
 
-        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+        services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ApplicationDbContext>());
 
         services.AddScoped<IUserRepository, UserRepository>();
 
@@ -65,8 +68,6 @@ public static class DependencyInjection
         services.AddScoped<IShareRepository, ShareRepository>();
 
         services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
-
-        services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ApplicationDbContext>());
 
         services.AddSingleton<ISqlConnectionFactory>(_ =>
             new SqlConnectionFactory(connectionString));
@@ -128,6 +129,19 @@ public static class DependencyInjection
         services.AddTransient<IAuthorizationHandler, ApiKeyAuthorizationHandler>();
         services.AddTransient<IAuthorizationPolicyProvider, ApiKeyAuthorizationPolicyProvider>();
 
+        return services;
+    }
+    
+    private static IServiceCollection AddBackgroundJobs(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<OutboxOptions>(configuration.GetSection("Outbox"));
+
+        services.AddQuartz();
+
+        services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
+
+        services.ConfigureOptions<ProcessOutboxMessagesJobSetup>();
+        
         return services;
     }
 }

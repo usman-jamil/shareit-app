@@ -8,7 +8,8 @@ using SharedKernel;
 namespace Application.ApiKeys.Revoke;
 
 internal sealed class RevokeApiKeyCommandHandler(
-    IApplicationDbContext context,
+    IApiKeyRepository keyRepository,
+    IUnitOfWork unitOfWork,
     IDateTimeProvider dateTimeProvider,
     IApiKeyHasher hasher)
     : ICommandHandler<RevokeApiKeyCommand>
@@ -23,8 +24,7 @@ internal sealed class RevokeApiKeyCommandHandler(
 
         string keyId = parts[1];
 
-        ApiKey? row = await context.ApiKeys
-            .SingleOrDefaultAsync(k => k.KeyId == keyId, cancellationToken);
+        ApiKey? row = await keyRepository.GetByKeyIdAsync(keyId, cancellationToken);
 
         if (row is null)
         {
@@ -38,7 +38,7 @@ internal sealed class RevokeApiKeyCommandHandler(
 
         row.RevokedAt = dateTimeProvider.UtcNow;
 
-        await context.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success();
     }
