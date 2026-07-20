@@ -1,9 +1,10 @@
 using System.Data;
 using Application.Abstractions.Data;
+using Dapper;
 using Infrastructure.DomainEvents;
+using Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Dapper;
 using Newtonsoft.Json;
 using Quartz;
 using SharedKernel;
@@ -23,7 +24,7 @@ internal sealed class ProcessOutboxMessagesJob(
     {
         TypeNameHandling = TypeNameHandling.All
     };
-    
+
     public async Task Execute(IJobExecutionContext context)
     {
         logger.LogInformation("Beginning to process outbox messages");

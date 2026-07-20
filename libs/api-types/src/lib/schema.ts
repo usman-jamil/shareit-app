@@ -41,21 +41,202 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Request"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResultOfCreateShareResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{shareId}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    shareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    shareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResultOfShareResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CreateShareResponse: {
+            /** Format: uuid */
+            shareId?: string;
+            files?: components["schemas"]["FileUploadUrl"][];
+        };
         Error: {
             code: string;
             description: string;
             type: components["schemas"]["ErrorType"];
         };
         ErrorType: number;
+        FileResponse: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            shareId?: string;
+            relativePath?: string;
+            sha256?: string;
+            contentType?: null | string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: int32 */
+            size?: number | string;
+        };
+        FileUpload: {
+            relativePath: string;
+            /** Format: int32 */
+            size: number | string;
+            contentType: null | string;
+        };
+        FileUploadUrl: {
+            relativePath: string;
+            /** Format: uri */
+            uploadUrl: string;
+        };
+        Request: {
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: int32 */
+            configuredTtlMinutes: null | number | string;
+            files: components["schemas"]["FileUpload"][];
+        };
+        ResultOfCreateShareResponse: {
+            value: components["schemas"]["CreateShareResponse"];
+            isSuccess: boolean;
+            isFailure?: boolean;
+            error: components["schemas"]["Error"];
+        };
+        ResultOfShareResponse: {
+            value: components["schemas"]["ShareResponse"];
+            isSuccess: boolean;
+            isFailure?: boolean;
+            error: components["schemas"]["Error"];
+        };
         ResultOfUserResponse: {
             value: components["schemas"]["UserResponse"];
             isSuccess: boolean;
             isFailure?: boolean;
             error: components["schemas"]["Error"];
+        };
+        ShareResponse: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            ownerUserId?: string;
+            status?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: int32 */
+            configuredTtlMinutes?: number | string;
+            /** Format: int64 */
+            totalBytes?: number | string;
+            /** Format: int32 */
+            fileCount?: number | string;
+            files?: components["schemas"]["FileResponse"][];
         };
         UserResponse: {
             /** Format: uuid */

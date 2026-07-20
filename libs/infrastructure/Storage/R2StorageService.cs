@@ -1,6 +1,7 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Application.Abstractions.Data;
+using Infrastructure.Options;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Storage;

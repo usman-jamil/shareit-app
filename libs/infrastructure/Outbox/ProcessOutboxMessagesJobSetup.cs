@@ -1,3 +1,4 @@
+using Infrastructure.Options;
 using Microsoft.Extensions.Options;
 using Quartz;
 

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Infrastructure.Authentication;
+namespace Infrastructure.Options;
 
 public sealed class ApiKeyOptions
 {

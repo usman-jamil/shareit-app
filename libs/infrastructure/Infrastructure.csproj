@@ -24,6 +24,10 @@
   <ItemGroup>
     <ProjectReference Include="..\application\Application.csproj" />
   </ItemGroup>
+    
+  <ItemGroup>
+      <InternalsVisibleTo Include="Application.IntegrationTests" />
+  </ItemGroup>  
 
   <ItemGroup>
     <Folder Include="Migrations\" />

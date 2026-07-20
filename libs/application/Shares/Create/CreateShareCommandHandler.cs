@@ -9,7 +9,7 @@ using SharedKernel;
 
 namespace Application.Shares.Create;
 
-internal sealed class CreateShareCommandHandler(
+public sealed class CreateShareCommandHandler(
     IShareRepository shareRepository,
     IFileRepository fileRepository,
     IUserRepository userRepository,

@@ -4,5 +4,7 @@ public interface IFileRepository
 {
     Task<Domain.Files.File?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<List<Domain.Files.File>> GetByShareIdAsync(Guid shareId, CancellationToken cancellationToken = default);
+
     void Add(Domain.Files.File file);
 }

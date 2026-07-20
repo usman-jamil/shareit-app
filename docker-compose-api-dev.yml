@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=share
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - 5432:5432
+
+  seq:
+    image: datalust/seq:latest
+    container_name: seq
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_NOAUTHENTICATION=true
+    volumes:
+      - seq_data:/data
+    ports:
+      - 8081:80
+      - 5341:5341
+
+  api:
+    container_name: api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__Database=Host=postgres;Port=5432;Database=share;Username=postgres;Password=postgres
+      - Serilog__WriteTo__1__Args__ServerUrl=http://seq:5341
+      - Outbox__IntervalInSeconds=60
+      - Outbox__BatchSize=10
+      - Share__ConfiguredTtlMinutes=60
+    ports:
+      - 5080:8080
+    depends_on:
+      - postgres
+      - seq
+
+volumes:
+  postgres_data:
+  seq_data:
+  api-1:

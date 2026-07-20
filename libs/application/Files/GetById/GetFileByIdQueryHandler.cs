@@ -19,10 +19,10 @@ internal sealed class GetFileByIdQueryHandler(IFileRepository fileRepository)
         }
 
         var response = new FileResponse
-        { 
-            Id = file.Id, 
-            ShareId = file.ShareId, 
-            RelativePath = file.RelativePath, 
+        {
+            Id = file.Id,
+            ShareId = file.ShareId,
+            RelativePath = file.RelativePath,
             Sha256 = file.Sha256,
             ContentType = file.ContentType,
             CreatedAt = file.CreatedAt,

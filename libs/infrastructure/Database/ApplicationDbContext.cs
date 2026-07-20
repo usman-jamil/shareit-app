@@ -18,7 +18,7 @@ public sealed class ApplicationDbContext(
     {
         TypeNameHandling = TypeNameHandling.All
     };
-    
+
     public DbSet<User> Users { get; set; }
 
     public DbSet<ApiKey> ApiKeys { get; set; }
@@ -79,7 +79,7 @@ public sealed class ApplicationDbContext(
                 domainEvent.GetType().Name,
                 JsonConvert.SerializeObject(domainEvent, JsonSerializerSettings)))
             .ToList();
-        
+
         AddRange(outboxMessages);
     }
 }

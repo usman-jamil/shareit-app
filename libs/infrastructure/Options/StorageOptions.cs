@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Infrastructure.Storage;
+namespace Infrastructure.Options;
 
 public sealed class StorageOptions
 {

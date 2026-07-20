@@ -10,6 +10,7 @@ using Infrastructure.Authentication;
 using Infrastructure.Authorization;
 using Infrastructure.Database;
 using Infrastructure.DomainEvents;
+using Infrastructure.Options;
 using Infrastructure.Outbox;
 using Infrastructure.Repositories;
 using Infrastructure.Storage;
@@ -31,13 +32,14 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration) =>
         services
+            .AddConfigurationOptions(configuration)
             .AddServices()
             .AddPersistence(configuration)
             .AddHealthChecks(configuration)
-            .AddStorage(configuration)
-            .AddAuthenticationInternal(configuration)
+            .AddStorage()
+            .AddAuthenticationInternal()
             .AddAuthorizationInternal()
-            .AddBackgroundJobs(configuration);
+            .AddBackgroundJobs();
 
     private static IServiceCollection AddServices(this IServiceCollection services)
     {
@@ -85,9 +87,8 @@ public static class DependencyInjection
     }
 
     private static IServiceCollection AddStorage(
-        this IServiceCollection services, IConfiguration configuration)
+        this IServiceCollection services)
     {
-        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
         services.AddSingleton<IAmazonS3>(sp =>
         {
             StorageOptions opts = sp.GetRequiredService<IOptions<StorageOptions>>().Value;
@@ -107,10 +108,8 @@ public static class DependencyInjection
     }
 
     private static IServiceCollection AddAuthenticationInternal(
-        this IServiceCollection services, IConfiguration configuration)
+        this IServiceCollection services)
     {
-        services.Configure<ApiKeyOptions>(configuration.GetSection(ApiKeyOptions.SectionName));
-
         services.AddHttpContextAccessor();
         // Store ApiKey:Pepper in user secrets
         services.AddSingleton<IApiKeyHasher>(sp =>
@@ -131,17 +130,26 @@ public static class DependencyInjection
 
         return services;
     }
-    
-    private static IServiceCollection AddBackgroundJobs(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.Configure<OutboxOptions>(configuration.GetSection("Outbox"));
 
+    private static IServiceCollection AddConfigurationOptions(this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.Configure<ApiKeyOptions>(configuration.GetSection(ApiKeyOptions.SectionName));
+        services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.SectionName));
+        services.Configure<ShareOptions>(configuration.GetSection(ShareOptions.SectionName));
+
+        return services;
+    }
+
+    private static IServiceCollection AddBackgroundJobs(this IServiceCollection services)
+    {
         services.AddQuartz();
 
         services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
         services.ConfigureOptions<ProcessOutboxMessagesJobSetup>();
-        
+
         return services;
     }
 }

@@ -1,3 +1,5 @@
+using Application.Files.GetById;
+
 namespace Application.Shares.GetById;
 
 public class ShareResponse
@@ -19,4 +21,6 @@ public class ShareResponse
     public long TotalBytes { get; set; }
 
     public int FileCount { get; set; }
+
+    public List<FileResponse> Files { get; set; } = [];
 }
