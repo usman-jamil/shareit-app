@@ -28,7 +28,7 @@ jobs:
         run: dotnet build share.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test share.slnx --configuration Release --no-restore --no-build
+        run: dotnet test --solution share.slnx --configuration Release --no-restore --no-build
 
       - name: Publish
         run: dotnet publish share.slnx --configuration Release --no-restore --no-build
