@@ -1,0 +1,16 @@
+{
+  "name": "share-cli",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "targets": {
+    "ping": {
+      "command": "dotnet run --launch-profile ping",
+      "options": {
+        "cwd": "apps/share-cli"
+      }
+    },
+    "build": {
+      "command": "dotnet build apps/share-cli/Share.Cli.csproj -c Release"
+    }
+  }
+}

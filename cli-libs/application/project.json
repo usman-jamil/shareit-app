@@ -1,0 +1,10 @@
+{
+  "name": "share-application",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "command": "dotnet build cli-libs/application/Share.Application.csproj -c Release"
+    }
+  }
+}
