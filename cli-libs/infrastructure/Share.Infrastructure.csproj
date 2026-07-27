@@ -21,4 +21,8 @@
     <ProjectReference Include="..\application\Share.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Share.Infrastructure.UnitTests" />
+  </ItemGroup>
+
 </Project>

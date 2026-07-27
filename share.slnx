@@ -36,4 +36,8 @@
     <Project Path="api-tests\application-unit-tests\Application.UnitTests.csproj" />
     <Project Path="api-tests\application-integration-tests\Application.IntegrationTests.csproj" />
   </Folder>
+  <Folder Name="/cli-tests/">
+    <Project Path="cli-tests\application-unit-tests\Share.Application.UnitTests.csproj" />
+    <Project Path="cli-tests\infrastructure-unit-tests\Share.Infrastructure.UnitTests.csproj" />
+  </Folder>
 </Solution>

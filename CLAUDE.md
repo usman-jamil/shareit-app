@@ -48,6 +48,10 @@ The single most important thing this file does is tell you **where a given chang
 │   ├── application/            # Share.Application.csproj     (Nx project: "share-application")
 │   └── infrastructure/         # Share.Infrastructure.csproj  (Nx project: "share-infrastructure")
 │
+├── cli-tests/                  # test projects for the apps/share-cli + cli-libs stack
+│   ├── application-unit-tests/         # Share.Application.UnitTests.csproj
+│   └── infrastructure-unit-tests/      # Share.Infrastructure.UnitTests.csproj (Refit.Testing)
+│
 └── shared-libs/                # libraries shared across every stack
     └── shared-kernal/          # SharedKernel.csproj — building blocks (no dependencies)  (Nx project: "shared-kernel")
 ```
@@ -60,18 +64,18 @@ Each project is an **Nx project** defined by its `project.json`. Nx targets (`se
 
 ### Decision table — which project owns a change
 
-| You are changing…                                     | It belongs in…                                         | Notes                                                                         |
-| ----------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| API behavior, endpoints, domain logic, persistence    | `apps/api` + `api-libs/*`                                  | Follow the Clean Architecture rules below.                                    |
-| Customer-facing CLI behavior or its business logic    | `apps/share-cli` + `cli-libs/*`                      | Never reach into `api-libs/application`, `api-libs/domain` or `api-libs/infrastructure`.   |
-| What the customer-facing CLI is configured with       | `~/.share/config.yaml` via `share config set`           | The YAML file is the source of truth, not `appsettings.json`.                  |
-| The shape of a request/response the frontend consumes | `apps/api` **first**, then regenerate `api-libs/api-types` | The contract is owned by the backend; types are generated, never hand-edited. |
-| The API client the customer-facing CLI calls           | `apps/api` **first**, then regenerate `cli-libs/api-types` | Refitter-generated Refit client; never hand-edit `Generated.cs`.              |
-| UI, pages, components, client-side state, fetching    | `apps/web`                                             | Self-contained; consumes `@share/api-types`.                                  |
-| The generated API type definitions                    | **Do not edit by hand** — regenerate from the API      | See [The API contract pipeline](#the-api-contract-pipeline).                  |
-| Shared frontend/TS code reused across web apps        | a **new `shared-libs/*`** project                             | Create with Nx generators; never reach into another app's `src`.              |
-| NuGet versions                                        | `Directory.Packages.props`                             | Central Package Management — see .NET conventions.                            |
-| npm dependency versions                               | root `package.json`                                    | Single lockfile; the workspace is one npm install.                            |
+| You are changing…                                     | It belongs in…                                             | Notes                                                                                    |
+| ----------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| API behavior, endpoints, domain logic, persistence    | `apps/api` + `api-libs/*`                                  | Follow the Clean Architecture rules below.                                               |
+| Customer-facing CLI behavior or its business logic    | `apps/share-cli` + `cli-libs/*`                            | Never reach into `api-libs/application`, `api-libs/domain` or `api-libs/infrastructure`. |
+| What the customer-facing CLI is configured with       | `~/.share/config.yaml` via `share config set`              | The YAML file is the source of truth, not `appsettings.json`.                            |
+| The shape of a request/response the frontend consumes | `apps/api` **first**, then regenerate `api-libs/api-types` | The contract is owned by the backend; types are generated, never hand-edited.            |
+| The API client the customer-facing CLI calls          | `apps/api` **first**, then regenerate `cli-libs/api-types` | Refitter-generated Refit client; never hand-edit `Generated.cs`.                         |
+| UI, pages, components, client-side state, fetching    | `apps/web`                                                 | Self-contained; consumes `@share/api-types`.                                             |
+| The generated API type definitions                    | **Do not edit by hand** — regenerate from the API          | See [The API contract pipeline](#the-api-contract-pipeline).                             |
+| Shared frontend/TS code reused across web apps        | a **new `shared-libs/*`** project                          | Create with Nx generators; never reach into another app's `src`.                         |
+| NuGet versions                                        | `Directory.Packages.props`                                 | Central Package Management — see .NET conventions.                                       |
+| npm dependency versions                               | root `package.json`                                        | Single lockfile; the workspace is one npm install.                                       |
 
 **Golden rule of the monorepo:** never create a runtime dependency from `apps/web` into `apps/api`'s source, or vice-versa. The _only_ thing they share is the generated contract in `api-libs/api-types`. If you find yourself wanting to import across that boundary directly, the answer is almost always "extend the OpenAPI contract and regenerate types."
 
@@ -142,13 +146,13 @@ The **customer-facing** CLI (`apps/share-cli/Share.Cli.csproj`, namespace `Share
 
 Unlike `apps/cli`, it does **not** sit on the `api-libs/*` backend. It has its own Clean Architecture stack under `cli-libs/`:
 
-| Project (path)                                                       | Namespace              | Depends on                          |
-| -------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
-| `Share.Domain` (`cli-libs/domain/Share.Domain.csproj`)             | `Share.Domain`         | `SharedKernel`                      |
-| `Share.Application` (`cli-libs/application/Share.Application.csproj`) | `Share.Application`  | `Share.Domain`, `SharedKernel`      |
-| `Share.Api.Types` (`cli-libs/api-types/Share.Api.Types.csproj`)      | `Share.Api.Types`      | `Refit` only — no project references |
-| `Share.Infrastructure` (`cli-libs/infrastructure/Share.Infrastructure.csproj`) | `Share.Infrastructure` | `Share.Application`, `Share.Api.Types` |
-| `Share.Cli` (`apps/share-cli/Share.Cli.csproj`)                      | `Share.Cli`            | `Share.Application`, `Share.Infrastructure` |
+| Project (path)                                                                 | Namespace              | Depends on                                  |
+| ------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------- |
+| `Share.Domain` (`cli-libs/domain/Share.Domain.csproj`)                         | `Share.Domain`         | `SharedKernel`                              |
+| `Share.Application` (`cli-libs/application/Share.Application.csproj`)          | `Share.Application`    | `Share.Domain`, `SharedKernel`              |
+| `Share.Api.Types` (`cli-libs/api-types/Share.Api.Types.csproj`)                | `Share.Api.Types`      | `Refit` only — no project references        |
+| `Share.Infrastructure` (`cli-libs/infrastructure/Share.Infrastructure.csproj`) | `Share.Infrastructure` | `Share.Application`, `Share.Api.Types`      |
+| `Share.Cli` (`apps/share-cli/Share.Cli.csproj`)                                | `Share.Cli`            | `Share.Application`, `Share.Infrastructure` |
 
 - The **same golden rules apply**: dependencies point inward only, all abstractions live in `Share.Application/Abstractions`, implementations in `Share.Infrastructure`, vertical slices per use case (`cli-libs/application/<Feature>/<UseCase>/`), handlers return `Result`/`Result<T>`.
 - `shared-libs/shared-kernal` (namespace `SharedKernel`) is the **one** thing both stacks share — it is dependency-free primitives (`Result`, `Error`, `Entity`, `IDateTimeProvider`). Nothing else crosses between `api-libs/*` and `cli-libs/*` in either direction.
@@ -176,7 +180,7 @@ It lives in its own project — not in `Share.Domain`, `Share.Application` or `S
 
 - it carries a hard `Refit` dependency, and the domain/application layers stay technology-agnostic;
 - it is machine-generated, so it gets analyzers and style enforcement switched off (`AnalysisMode=None`, `SonarQubeExclude`) — settings we do **not** want leaking onto hand-written layers;
-- `SharedKernel` is shared by *both* stacks and must stay dependency-free; this contract belongs only to the CLI stack.
+- `SharedKernel` is shared by _both_ stacks and must stay dependency-free; this contract belongs only to the CLI stack.
 
 Rules:
 
@@ -189,17 +193,37 @@ Rules:
 
 The seam between the CLI's use cases and HTTP:
 
-| Piece                                                          | Lives in                                                     |
-| -------------------------------------------------------------- | ------------------------------------------------------------ |
-| `IShareApiClient` + its request/response models                | `cli-libs/application/Abstractions/Api/`                      |
+| Piece                                                           | Lives in                                                            |
+| --------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `IShareApiClient` + its request/response models                 | `cli-libs/application/Abstractions/Api/`                            |
 | `ShareApiClient` (adapter), mapping, error translation, options | `cli-libs/infrastructure/Api/` + `cli-libs/infrastructure/Options/` |
-| `ShareApiErrors`, `ShareStatus`                                | `cli-libs/domain/Api/`, `cli-libs/domain/Shares/`              |
+| `ShareApiErrors`, `ShareStatus`                                 | `cli-libs/domain/Api/`, `cli-libs/domain/Shares/`                   |
 
 - **Handlers depend on `IShareApiClient`, never on `IApiv1`.** One method per API operation, named for the CLI's usage rather than the route (`CreateShareAsync`, not `SharesPost`).
 - **Every method returns `Result`/`Result<T>`.** The adapter unwraps the API's `Result` envelope, converts ProblemDetails responses back into `Error`s with the right `ErrorType` (400 → `Validation` incl. the `errors` extension, 404 → `NotFound`, 409 → `Conflict`, 401/403 → `ShareApiErrors.Unauthorized()`), and turns dead connections and timeouts into `ShareApiErrors.Unreachable`/`Timeout`. Only `OperationCanceledException` from the caller's own token propagates.
-- **Uploading is a three-step conversation** — `CreateShareAsync` → PUT bytes to each presigned `FileUploadUrl` → `FinalizeShareAsync`. Step 2 goes straight to object storage and is deliberately *not* on this interface; when it's needed, give it its own abstraction rather than widening this one.
+- **Uploading is a three-step conversation** — `CreateShareAsync` → PUT bytes to each presigned `FileUploadUrl` → `FinalizeShareAsync`. Step 2 goes straight to object storage and is deliberately _not_ on this interface; when it's needed, give it its own abstraction rather than widening this one.
 - Registration is `AddRefitGeneratedClient<IApiv1>()` (not `AddRefitClient`) — the generated interface is fully source-generated, so this avoids Refit's reflection request builder. `ApiKeyHeaderHandler` attaches `X-Api-Key` to every request.
 - Configuration is the `ShareApi` section (`BaseUrl`, `ApiKey`, `TimeoutSeconds`), whose source of truth is the user's YAML file (see below). It is **not** validated at startup, so `share --help` works unconfigured; a missing key comes back as a `ShareApi.Unauthorized` failure result. Keep the key out of `appsettings.json` — use user secrets or the `ShareApi__ApiKey` environment variable.
+
+### `cli-tests` — testing the CLI stack
+
+Two unit-test projects, mirroring `api-tests`. Both are xUnit v3 on the Microsoft Testing Platform with Shouldly, and both are registered in `share.slnx`.
+
+| Project (path)                                                            | Tests                                   | Fakes the API with                 |
+| ------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------- |
+| `Share.Application.UnitTests` (`cli-tests/application-unit-tests/`)       | Use-case handlers and validators        | NSubstitute over `IShareApiClient` |
+| `Share.Infrastructure.UnitTests` (`cli-tests/infrastructure-unit-tests/`) | `ShareApiClient`, `ApiKeyHeaderHandler` | `Refit.Testing`'s `StubHttp`       |
+
+- **Handler tests never touch HTTP.** Take an `IShareApiClient` from `ShareApiClientSubstitute.Create()` (every operation succeeds with `ShareApiData`), then re-arrange the one call the test is about with `FailsGetUser`/`FailsCreateShare`/`FailsFinalizeShare`/`FailsGetShare`.
+- **Adapter tests stub the socket, not the client.** `StubHttp` is a route table (`Route.Get("/shares/{shareId}")` → `Reply.With(...)`/`Reply.Json(...)`/`Reply.Status(...)`) handed to `http.CreateGeneratedClient<IApiv1>(baseUrl)`, so the real generated Refit client, its serializer and Refit's exception behaviour are all exercised. That is where each `Error` mapping (404, 409, 400 + `errors`, 401/403, unreachable, failed envelope) is pinned.
+- Wire payloads are built from the **generated contract types** in `ShareApiResponses`, so a regenerated `Generated.cs` breaks the build rather than letting the tests drift. Only the ProblemDetails bodies are raw JSON — the API composes those itself and they are not in the generated client.
+- Handlers, validators and the adapter are `internal`, so each library grants `InternalsVisibleTo` to its test project. Keep that pairing when adding projects.
+
+```bash
+nx test Share.Application.UnitTests
+nx test Share.Infrastructure.UnitTests
+dotnet test --project cli-tests/application-unit-tests/Share.Application.UnitTests.csproj
+```
 
 ### Configuration — `~/.share/config.yaml` is the source of truth
 
@@ -221,7 +245,7 @@ share config path                              # where the file is
 - **Path resolution** is `cli-libs/infrastructure/Configuration/CliConfigurationPath.cs`: `Environment.SpecialFolder.UserProfile` + `Path.Combine`, so it lands on `C:\Users\<name>\.share\config.yaml`, `/Users/<name>/.share/config.yaml` and `/home/<name>/.share/config.yaml` with no OS-specific code. `SHARE_CLI_CONFIG` overrides the whole path — **use it in tests** so they never touch the developer's real file.
 - **Precedence:** `AddShareCliConfigurationFile()` is registered **last** in `Program.cs`, so the YAML file beats `appsettings.json`, user secrets and environment variables. That is what "source of truth" means here — do not reorder it.
 - **Defaults live in one place**, `Share.Domain.Configuration.ShareApiDefaults`. Both `ShareApiOptions` and `config show` read from it, so there is no second copy to drift.
-- **The file is optional and never fatal.** A missing file means everything defaults. A malformed file is reported on stderr and *ignored* rather than crashing startup — otherwise no command, not even `config path`, could run to fix it. `config show` then reports the precise parse error.
+- **The file is optional and never fatal.** A missing file means everything defaults. A malformed file is reported on stderr and _ignored_ rather than crashing startup — otherwise no command, not even `config path`, could run to fix it. `config show` then reports the precise parse error.
 - **`config set` merges**: it rewrites only the keys you pass, preserves unrelated keys in the file, writes via a temp file + move, and chmods `700`/`600` on Unix. It refuses to overwrite a file it cannot parse (`Configuration.Unparseable`) rather than discarding hand-written content. Comments are not preserved.
 - **Reading and writing** go through `IConfigurationStore` (`cli-libs/application/Abstractions/Configuration/`), implemented by `YamlConfigurationStore`. The `Get`/`Set` use cases are ordinary CQRS slices under `cli-libs/application/Configuration/`. `config path` is the one command that bypasses a handler — it must keep working when the file is unreadable.
 - The YAML → `Section:Key` flattening lives in `YamlConfigurationParser` and is shared by the configuration provider and the store, so both read the file identically.
@@ -247,15 +271,15 @@ These rules are enforced by `api-tests/architecture-tests` (`ArchitectureTests`)
 
 The class-library layers live under `api-libs/` (one folder per project), except `SharedKernel`, which lives in `shared-libs/shared-kernal/` because both the API and the `share-cli` stacks depend on it; the Api host is `apps/api/Api.csproj`; tests live under `api-tests/`.
 
-| Project (path)                                                 | Responsibility                       | Allowed to contain                                                                                                                                                        |
-| -------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SharedKernel` (`shared-libs/shared-kernal/SharedKernel.csproj`)      | Building blocks shared by all layers | `Result`/`Error`, `Entity` base, `IDomainEvent`, `IDateTimeProvider`, primitives. No dependencies.                                                                        |
+| Project (path)                                                     | Responsibility                       | Allowed to contain                                                                                                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SharedKernel` (`shared-libs/shared-kernal/SharedKernel.csproj`)   | Building blocks shared by all layers | `Result`/`Error`, `Entity` base, `IDomainEvent`, `IDateTimeProvider`, primitives. No dependencies.                                                                        |
 | `Domain` (`api-libs/domain/Domain.csproj`)                         | Enterprise rules                     | Entities, value objects, enums, domain events, **static `*Errors` classes**. No EF, no I/O, no framework references.                                                      |
 | `Application` (`api-libs/application/Application.csproj`)          | Use cases                            | Command/Query handlers, validators, **all abstractions/interfaces** (`I...`), behaviors (decorators), DTO responses, domain-event handlers.                               |
 | `Infrastructure` (`api-libs/infrastructure/Infrastructure.csproj`) | Technical implementations            | EF Core `DbContext`, entity configurations, migrations, auth/JWT, password hashing, time provider, domain-event dispatcher — implementations of Application abstractions. |
-| `Api` (`apps/api/Api.csproj`)                                  | Presentation / composition root      | Minimal-API endpoints, middleware, exception handler, DI wiring, OpenAPI, request mapping. **Emits the OpenAPI document** consumed by `api-libs/api-types`.                   |
-| `Cli` (`apps/cli/Cli.csproj`)                                  | Basic automation                     | console application project, DI wiring, request mapping.                                                                                                                  |
-| `Share.Cli` (`apps/share-cli/Share.Cli.csproj`)                | Customer-facing CLI                  | console application project, DI wiring, command → use-case mapping. Sits on `cli-libs/*`, **not** `api-libs/*`.                                                              |
+| `Api` (`apps/api/Api.csproj`)                                      | Presentation / composition root      | Minimal-API endpoints, middleware, exception handler, DI wiring, OpenAPI, request mapping. **Emits the OpenAPI document** consumed by `api-libs/api-types`.               |
+| `Cli` (`apps/cli/Cli.csproj`)                                      | Basic automation                     | console application project, DI wiring, request mapping.                                                                                                                  |
+| `Share.Cli` (`apps/share-cli/Share.Cli.csproj`)                    | Customer-facing CLI                  | console application project, DI wiring, command → use-case mapping. Sits on `cli-libs/*`, **not** `api-libs/*`.                                                           |
 
 #### Where abstractions live (critical)
 
