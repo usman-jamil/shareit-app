@@ -4,7 +4,7 @@
   "projectType": "library",
   "targets": {
     "build": {
-      "command": "dotnet build libs/domain/Domain.csproj -c Release"
+      "command": "dotnet build api-libs/domain/Domain.csproj -c Release"
     }
   }
 }

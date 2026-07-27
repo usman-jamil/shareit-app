@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "command": "dotnet build libs/infrastructure/Infrastructure.csproj -c Release"
+      "command": "dotnet build api-libs/infrastructure/Infrastructure.csproj -c Release"
     }
   }
 }

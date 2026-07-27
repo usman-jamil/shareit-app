@@ -11,7 +11,7 @@ package-lock.json
 
 # Projects to ignore
 apps/api/**
-libs/api-types/**
+api-libs/api-types/**
 
 # IDE
 .vscode/

@@ -7,11 +7,13 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+# Central Package Management: restore cannot resolve versions without these.
+COPY ["Directory.Packages.props", "Directory.Build.props", "./"]
 COPY ["apps/api/Api.csproj", "apps/api/"]
-COPY ["libs/infrastructure/Infrastructure.csproj", "libs/infrastructure/"]
-COPY ["libs/application/Application.csproj", "libs/application/"]
-COPY ["libs/domain/Domain.csproj", "libs/domain/"]
-COPY ["libs/shared-kernal/SharedKernel.csproj", "libs/shared-kernal/"]
+COPY ["api-libs/infrastructure/Infrastructure.csproj", "api-libs/infrastructure/"]
+COPY ["api-libs/application/Application.csproj", "api-libs/application/"]
+COPY ["api-libs/domain/Domain.csproj", "api-libs/domain/"]
+COPY ["shared-libs/shared-kernal/SharedKernel.csproj", "shared-libs/shared-kernal/"]
 RUN dotnet restore "apps/api/Api.csproj"
 COPY . .
 WORKDIR "/src/apps/api"

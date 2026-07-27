@@ -15,14 +15,25 @@
   <Folder Name="/apps/cli/">
     <Project Path="apps/cli/Cli.csproj" />
   </Folder>
-  <Folder Name="/libs/">
-    <Project Path="libs/application/Application.csproj" />
-    <Project Path="libs/domain/Domain.csproj" />
-    <Project Path="libs/infrastructure/Infrastructure.csproj" />
-    <Project Path="libs/shared-kernal/SharedKernel.csproj" />
+  <Folder Name="/apps/share-cli/">
+    <Project Path="apps/share-cli/Share.Cli.csproj" />
   </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests\application-unit-tests\Application.UnitTests.csproj" />
-    <Project Path="tests\application-integration-tests\Application.IntegrationTests.csproj" />
+  <Folder Name="/api-libs/">
+    <Project Path="api-libs/application/Application.csproj" />
+    <Project Path="api-libs/domain/Domain.csproj" />
+    <Project Path="api-libs/infrastructure/Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/cli-libs/">
+    <Project Path="cli-libs/api-types/Share.Api.Types.csproj" />
+    <Project Path="cli-libs/application/Share.Application.csproj" />
+    <Project Path="cli-libs/domain/Share.Domain.csproj" />
+    <Project Path="cli-libs/infrastructure/Share.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/shared-libs/">
+    <Project Path="shared-libs/shared-kernal/SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/api-tests/">
+    <Project Path="api-tests\application-unit-tests\Application.UnitTests.csproj" />
+    <Project Path="api-tests\application-integration-tests\Application.IntegrationTests.csproj" />
   </Folder>
 </Solution>
