@@ -1,0 +1,295 @@
+name: Release Share CLI
+
+# Publishes the customer-facing CLI (apps/share-cli) for every supported platform.
+#
+# Tagging `sharecli-1.2.3` (or `sharecli-v1.2.3-beta.1`) builds the binaries and creates the
+# GitHub release. `workflow_dispatch` runs the same build and leaves the archives as workflow
+# artifacts without publishing anything, so a release can be rehearsed before it is tagged.
+
+on:
+  push:
+    tags:
+      - 'sharecli-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. 1.2.3 or 1.2.3-beta.1. Dry run — no release is published.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-share-cli-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '10.x'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  PROJECT: apps/share-cli/Share.Cli.csproj
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - name: Resolve the version from the tag or the dispatch input
+        id: resolve
+        env:
+          # Through the environment rather than inline `${{ }}`: a tag name is attacker-supplied
+          # text and must never be pasted into a shell script.
+          RAW_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          raw="$RAW_VERSION"
+          if [ "$EVENT_NAME" != "workflow_dispatch" ]; then
+            raw="${raw#sharecli-}"
+          fi
+          version="${raw#v}"
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$version' is not a valid version. Tag as sharecli-1.2.3 or sharecli-v1.2.3-beta.1."
+            exit 1
+          fi
+
+          prerelease=false
+          case "$version" in
+            *-*) prerelease=true ;;
+          esac
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Share CLI $version (prerelease: $prerelease)" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Only the CLI stack: the API's integration tests need Testcontainers and have no
+      # bearing on whether these binaries are fit to ship.
+      - name: Test the CLI stack
+        run: |
+          dotnet test --project cli-tests/application-unit-tests/Share.Application.UnitTests.csproj --configuration Release
+          dotnet test --project cli-tests/infrastructure-unit-tests/Share.Infrastructure.UnitTests.csproj --configuration Release
+
+  build:
+    name: Build ${{ matrix.rid }}
+    needs: [version, test]
+    # Every target is cross-published from Linux. A self-contained (non-AOT) publish does not
+    # need a matching host, and building the Unix targets on a Unix host is what preserves the
+    # executable bit inside the archives — a Windows runner would drop it.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            archive: tar.gz
+          - rid: linux-arm64
+            archive: tar.gz
+          - rid: osx-x64
+            archive: tar.gz
+          - rid: osx-arm64
+            archive: tar.gz
+          - rid: win-x64
+            archive: zip
+          - rid: win-arm64
+            archive: zip
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # --self-contained bundles the runtime, so the machine that runs `share` needs nothing
+      # installed. InvariantGlobalization drops the last external dependency (ICU), which
+      # minimal Linux images do not carry. Not trimmed: the configuration binder and Serilog's
+      # settings provider resolve types by reflection, which trimming would break.
+      - name: Publish
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+
+          dotnet publish "$PROJECT" \
+            --configuration Release \
+            --runtime "$RID" \
+            --self-contained true \
+            --output "publish/$RID" \
+            -p:Version="$VERSION" \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:InvariantGlobalization=true \
+            -p:DebugType=embedded
+
+      # Proves the claim the release makes: a stock image with no .NET runtime, no SDK and no
+      # libicu runs the binary. Only the runner's own architecture can be executed here.
+      - name: Verify the binary runs without a .NET runtime
+        if: matrix.rid == 'linux-x64'
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          reported=$(docker run --rm \
+            --volume "$PWD/publish/linux-x64:/opt/share:ro" \
+            ubuntu:24.04 /opt/share/share --version)
+
+          if [ "$reported" != "$VERSION" ]; then
+            echo "::error::Published binary reported version '$reported', expected '$VERSION'."
+            exit 1
+          fi
+
+      - name: Package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          RID: ${{ matrix.rid }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+          name="share-$VERSION-$RID"
+
+          if [ "$ARCHIVE" = "zip" ]; then
+            (cd "publish/$RID" && zip --quiet --recurse-paths "$GITHUB_WORKSPACE/dist/$name.zip" .)
+          else
+            tar --create --gzip --file "dist/$name.tar.gz" --directory "publish/$RID" .
+          fi
+
+          (cd dist && sha256sum "$name.$ARCHIVE" > "$name.$ARCHIVE.sha256")
+          ls -l dist
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: share-${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: [version, build]
+    # Tags publish; a manual run only leaves the archives as workflow artifacts.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download every archive
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: share-*
+          merge-multiple: true
+
+      - name: Collect the checksums into one file
+        run: |
+          set -euo pipefail
+
+          cd artifacts
+          cat ./*.sha256 | sort -k 2 > SHA256SUMS.txt
+          rm -f ./*.sha256
+          cat SHA256SUMS.txt
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          notes="$RUNNER_TEMP/notes.md"
+          cat > "$notes" <<'NOTES'
+          Self-contained builds of the `share` CLI. Nothing else is required to run them — no
+          .NET runtime, no SDK, no system libraries.
+
+          | Platform | Download |
+          | --- | --- |
+          | macOS (Apple silicon) | `share-VERSION-osx-arm64.tar.gz` |
+          | macOS (Intel) | `share-VERSION-osx-x64.tar.gz` |
+          | Linux (x64) | `share-VERSION-linux-x64.tar.gz` |
+          | Linux (arm64) | `share-VERSION-linux-arm64.tar.gz` |
+          | Windows (x64) | `share-VERSION-win-x64.zip` |
+          | Windows (arm64) | `share-VERSION-win-arm64.zip` |
+
+          ### Install — macOS and Linux
+
+          ```bash
+          tar -xzf share-VERSION-<platform>.tar.gz
+          sudo mv share /usr/local/bin/share
+          share --version
+          ```
+
+          On macOS the binary is unsigned, so Gatekeeper quarantines downloads. Clear it with
+          `xattr -d com.apple.quarantine /usr/local/bin/share`.
+
+          The archive also holds an `appsettings.json`, which only tunes logging. `share` runs
+          without it — the settings that matter live in `~/.share/config.yaml`, written by
+          `share config set`.
+
+          ### Install — Windows
+
+          Unzip and put `share.exe` somewhere on your `PATH`. SmartScreen warns about unsigned
+          executables the first time; choose *More info* → *Run anyway*.
+
+          ### Verify the download
+
+          ```bash
+          sha256sum -c --ignore-missing SHA256SUMS.txt
+          ```
+
+          ### First run
+
+          ```bash
+          share config set --base-url https://api.example.com --api-key <key> --user-id <id>
+          share create --path ./folder-to-share
+          ```
+          NOTES
+
+          sed -i "s/VERSION/$VERSION/g" "$notes"
+
+          # Append GitHub's own generated changelog. Asked for explicitly rather than via
+          # `--generate-notes`, which would compete with --notes-file; a failure here costs
+          # the changelog section, not the release.
+          generated=$(gh api \
+            --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            --field tag_name="$TAG" \
+            --jq '.body' || true)
+
+          if [ -n "$generated" ]; then
+            printf '\n---\n\n%s\n' "$generated" >> "$notes"
+          fi
+
+          prerelease_flag=""
+          if [ "$PRERELEASE" = "true" ]; then
+            prerelease_flag="--prerelease"
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Share CLI $VERSION" \
+            --notes-file "$notes" \
+            $prerelease_flag \
+            artifacts/*

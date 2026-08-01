@@ -16,6 +16,8 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
 {
     private const string SectionName = "shareApi";
     private const string BaseUrlKey = "baseUrl";
+    private const string ApiKeyKey = "apiKey";
+    private const string UserIdKey = "userId";
     private const string TimeoutSecondsKey = "timeoutSeconds";
 
     private static readonly string Header =
@@ -84,6 +86,8 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
         YamlMappingNode section = GetOrAddMapping(root.Value, SectionName);
 
         SetScalar(section, BaseUrlKey, settings.BaseUrl?.ToString());
+        SetScalar(section, ApiKeyKey, settings.ApiKey);
+        SetScalar(section, UserIdKey, settings.UserId?.ToString());
         SetScalar(
             section,
             TimeoutSecondsKey,
@@ -125,7 +129,26 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
             timeoutSeconds = parsed;
         }
 
-        return Result.Success(new ShareApiSettings(baseUrl, timeoutSeconds));
+        // Nothing to validate: any non-blank string is a plausible key, and a wrong one is
+        // the API's business — it comes back as a ShareApi.Unauthorized failure result.
+        string? apiKey = TryGet(values, ApiKeyKey, out string? rawApiKey) ? rawApiKey : null;
+
+        Guid? userId = null;
+
+        if (TryGet(values, UserIdKey, out string? rawUserId))
+        {
+            if (!Guid.TryParse(rawUserId, CultureInfo.InvariantCulture, out Guid parsedUserId))
+            {
+                return Result.Failure<ShareApiSettings>(ConfigurationErrors.InvalidValue(
+                    Location,
+                    $"{SectionName}.{UserIdKey}",
+                    $"'{rawUserId}' is not a valid id"));
+            }
+
+            userId = parsedUserId;
+        }
+
+        return Result.Success(new ShareApiSettings(baseUrl, timeoutSeconds, apiKey, userId));
     }
 
     private static bool TryGet(

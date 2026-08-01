@@ -26,6 +26,7 @@ ConsoleApp.ServiceProvider = host.Services;
 ConsoleApp.ConsoleAppBuilder consoleApp = ConsoleApp.Create();
 
 consoleApp.Add<PingCommands>();
+consoleApp.Add<ShareCommands>();
 consoleApp.Add<ConfigCommands>("config");
 
 await consoleApp.RunAsync(args);

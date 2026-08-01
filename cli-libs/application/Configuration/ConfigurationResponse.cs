@@ -9,13 +9,24 @@ namespace Share.Application.Configuration;
 /// </summary>
 /// <param name="Location">Absolute path of the configuration file.</param>
 /// <param name="Exists">Whether that file is present.</param>
+/// <param name="ApiKeyIsSet">
+/// Whether an API key is configured. The key itself deliberately never leaves the store —
+/// this response is printed to the console, so it carries presence only. There is no
+/// "is default" counterpart because an API key has no default to fall back to.
+/// </param>
+/// <param name="UserId">
+/// The configured owner for new shares, or <see langword="null"/> when none is set. Not a
+/// secret, so unlike the API key it is reported in full.
+/// </param>
 public sealed record ConfigurationResponse(
     string Location,
     bool Exists,
     Uri BaseUrl,
     bool BaseUrlIsDefault,
     int TimeoutSeconds,
-    bool TimeoutSecondsIsDefault)
+    bool TimeoutSecondsIsDefault,
+    bool ApiKeyIsSet,
+    Guid? UserId)
 {
     public static ConfigurationResponse From(string location, bool exists, ShareApiSettings settings)
     {
@@ -27,6 +38,8 @@ public sealed record ConfigurationResponse(
             settings.BaseUrl ?? ShareApiDefaults.BaseUrl,
             settings.BaseUrl is null,
             settings.TimeoutSeconds ?? ShareApiDefaults.TimeoutSeconds,
-            settings.TimeoutSeconds is null);
+            settings.TimeoutSeconds is null,
+            !string.IsNullOrWhiteSpace(settings.ApiKey),
+            settings.UserId);
     }
 }

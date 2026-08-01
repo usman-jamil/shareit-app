@@ -21,6 +21,8 @@
     <None Remove="appsettings.Development.json" />
     <Content Include="appsettings.Development.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <!-- Developer overrides: useful under `dotnet run`, never shipped to a user. -->
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 

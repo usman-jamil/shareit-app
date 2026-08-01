@@ -158,7 +158,7 @@ Unlike `apps/cli`, it does **not** sit on the `api-libs/*` backend. It has its o
 - `shared-libs/shared-kernal` (namespace `SharedKernel`) is the **one** thing both stacks share — it is dependency-free primitives (`Result`, `Error`, `Entity`, `IDateTimeProvider`). Nothing else crosses between `api-libs/*` and `cli-libs/*` in either direction.
 - The CQRS interfaces are duplicated per stack on purpose: use `Share.Application.Abstractions.Messaging.*` here, never `Application.Abstractions.Messaging.*`.
 - Commands live in `apps/share-cli/Commands/<Feature>Commands.cs` and are registered in `Program.cs` via `consoleApp.Add<T>()`. Keep them thin: resolve the handler from a scope, invoke it, render the result.
-- `Ping` (`cli-libs/application/Ping/` + `apps/share-cli/Commands/PingCommands.cs`) is a placeholder slice proving the wiring — delete it once the first real use case lands.
+- `Ping` (`cli-libs/application/Ping/` + `apps/share-cli/Commands/PingCommands.cs`) is a placeholder slice proving the wiring. The first real use case (`share create`) has landed, so it is now safe to delete.
 
 ### `cli-libs/api-types` — the CLI's generated API client
 
@@ -201,9 +201,29 @@ The seam between the CLI's use cases and HTTP:
 
 - **Handlers depend on `IShareApiClient`, never on `IApiv1`.** One method per API operation, named for the CLI's usage rather than the route (`CreateShareAsync`, not `SharesPost`).
 - **Every method returns `Result`/`Result<T>`.** The adapter unwraps the API's `Result` envelope, converts ProblemDetails responses back into `Error`s with the right `ErrorType` (400 → `Validation` incl. the `errors` extension, 404 → `NotFound`, 409 → `Conflict`, 401/403 → `ShareApiErrors.Unauthorized()`), and turns dead connections and timeouts into `ShareApiErrors.Unreachable`/`Timeout`. Only `OperationCanceledException` from the caller's own token propagates.
-- **Uploading is a three-step conversation** — `CreateShareAsync` → PUT bytes to each presigned `FileUploadUrl` → `FinalizeShareAsync`. Step 2 goes straight to object storage and is deliberately _not_ on this interface; when it's needed, give it its own abstraction rather than widening this one.
+- **Uploading is a three-step conversation** — `CreateShareAsync` → PUT bytes to each presigned `FileUploadUrl` → `FinalizeShareAsync`. Step 2 goes straight to object storage and is deliberately _not_ on this interface: it has its own abstraction, `IFileUploader` (see below). Do not widen `IShareApiClient` to cover it — that would send the CLI's API key to a third party.
 - Registration is `AddRefitGeneratedClient<IApiv1>()` (not `AddRefitClient`) — the generated interface is fully source-generated, so this avoids Refit's reflection request builder. `ApiKeyHeaderHandler` attaches `X-Api-Key` to every request.
-- Configuration is the `ShareApi` section (`BaseUrl`, `ApiKey`, `TimeoutSeconds`), whose source of truth is the user's YAML file (see below). It is **not** validated at startup, so `share --help` works unconfigured; a missing key comes back as a `ShareApi.Unauthorized` failure result. Keep the key out of `appsettings.json` — use user secrets or the `ShareApi__ApiKey` environment variable.
+- Configuration is the `ShareApi` section (`BaseUrl`, `ApiKey`, `TimeoutSeconds`), whose source of truth is the user's YAML file (see below). It is **not** validated at startup, so `share --help` works unconfigured; a missing key comes back as a `ShareApi.Unauthorized` failure result. Keep the key out of `appsettings.json` — use `share config set --api-key`, user secrets, or the `ShareApi__ApiKey` environment variable. Note that the YAML file wins over all of them (see precedence below), and the options are bound once at startup, so a key set in one process takes effect from the next command onwards.
+
+### `share create` — the upload use case
+
+`share create [--path <dir>] [--user-id <id>] [--ttl-minutes <n>]` shares a whole folder. The slice is `cli-libs/application/Shares/Create/`, and its handler is the only place the three-step conversation is sequenced.
+
+| Piece                                           | Lives in                                        |
+| ----------------------------------------------- | ----------------------------------------------- |
+| `IFileScanner`, `LocalFile`, `ScannedDirectory` | `cli-libs/application/Abstractions/FileSystem/` |
+| `IFileUploader`                                 | `cli-libs/application/Abstractions/Storage/`    |
+| `FileScanner`, `ContentTypes`                   | `cli-libs/infrastructure/FileSystem/`           |
+| `PresignedFileUploader`                         | `cli-libs/infrastructure/Storage/`              |
+| `ShareErrors`                                   | `cli-libs/domain/Shares/`                       |
+
+- **The handler owns the sequence, not the I/O.** It resolves the owner, scans, calls `CreateShareAsync`, uploads each file, then calls `FinalizeShareAsync`. Every step is a `Result` check — nothing throws.
+- **Everything under the folder is included**, recursively, hidden files and dotted directories too. Relative paths are normalised to forward slashes in `FileScanner` so a share created on Windows reads the same everywhere, and the file list is sorted so runs are reproducible.
+- **Upload targets are matched to local files by relative path, never by position** — the API makes no promise about ordering. A file with no matching target fails with `Share.MissingUploadUrl`.
+- **Uploads run one at a time and stop at the first failure**, and nothing is rolled back: a share that is created but never finalized stays `pending` and expires on its own. Do not add server-side cleanup the CLI does not own.
+- **`PresignedFileUploader` gets its own `HttpClient`**, registered in `Infrastructure/DependencyInjection.cs` _without_ `ApiKeyHeaderHandler` and with no timeout — presigned URLs point at object storage, the API key must not travel there, and an upload takes as long as the file is (cancellation stops it). Keep both properties if you touch that registration.
+- **The owner comes from `--user-id`, falling back to `shareApi.userId` in the configuration file.** Unlike the other settings this one is read through `IConfigurationStore` rather than `IOptions`, so it is file-only — no `ShareApi__UserId` environment variable. The API takes `OwnerUserId` explicitly today; if it ever derives the owner from the API key, this fallback is the thing to delete.
+- The API's manifest carries sizes as a 32-bit value, so a single file over `int.MaxValue` bytes fails with `Share.FileTooLarge` before anything is sent.
 
 ### `cli-tests` — testing the CLI stack
 
@@ -233,12 +253,16 @@ The CLI reads its settings from a YAML file in the user's home directory:
 # <user home>/.share/config.yaml
 shareApi:
   baseUrl: https://api.example.com
+  apiKey: sk_live_...
+  userId: 11111111-1111-1111-1111-111111111111
   timeoutSeconds: 45
 ```
 
 ```bash
 share config show                              # effective values + which are defaulted
 share config set --base-url https://api.example.com --timeout-seconds 45
+share config set --api-key sk_live_...         # or -k
+share config set --user-id <id>                # or -i; the owner `share create` uses
 share config path                              # where the file is
 ```
 
@@ -247,6 +271,7 @@ share config path                              # where the file is
 - **Defaults live in one place**, `Share.Domain.Configuration.ShareApiDefaults`. Both `ShareApiOptions` and `config show` read from it, so there is no second copy to drift.
 - **The file is optional and never fatal.** A missing file means everything defaults. A malformed file is reported on stderr and _ignored_ rather than crashing startup — otherwise no command, not even `config path`, could run to fix it. `config show` then reports the precise parse error.
 - **`config set` merges**: it rewrites only the keys you pass, preserves unrelated keys in the file, writes via a temp file + move, and chmods `700`/`600` on Unix. It refuses to overwrite a file it cannot parse (`Configuration.Unparseable`) rather than discarding hand-written content. Comments are not preserved.
+- **The API key is write-only.** `share config set --api-key` is the way to store it; nothing ever reads it back out to the user. `ShareApiSettings.ApiKey` leaves the store only to be written straight back to the file — `ConfigurationResponse` carries `ApiKeyIsSet` (a bool), `config show` prints `set`/`not set`, and no validator or `ConfigurationErrors` message interpolates the value. Keep it that way when adding settings that are secrets. There is no way to _clear_ the key from the CLI; delete the line from the file. A blank key is rejected rather than written.
 - **Reading and writing** go through `IConfigurationStore` (`cli-libs/application/Abstractions/Configuration/`), implemented by `YamlConfigurationStore`. The `Get`/`Set` use cases are ordinary CQRS slices under `cli-libs/application/Configuration/`. `config path` is the one command that bypasses a handler — it must keep working when the file is unreadable.
 - The YAML → `Section:Key` flattening lives in `YamlConfigurationParser` and is shared by the configuration provider and the store, so both read the file identically.
 
@@ -422,6 +447,25 @@ dotnet ef migrations add <Name> \              # add a migration
 ```
 
 Migrations are applied automatically in Development on startup (`app.ApplyMigrations()`).
+
+---
+
+## Releasing the Share CLI
+
+`.github/workflows/release-share-cli.yml` builds and publishes `apps/share-cli`. Pushing a tag matching `sharecli-*` is the whole release process:
+
+```bash
+git tag sharecli-1.2.3 && git push origin sharecli-1.2.3   # or sharecli-v1.2.3-beta.1
+```
+
+The tag is the version: `sharecli-` and an optional `v` are stripped, the rest must be `MAJOR.MINOR.PATCH` with an optional `-suffix`, and it is passed to `dotnet publish` as `-p:Version=` (so `share --version` matches the tag). A suffix marks the GitHub release as a prerelease. Run the workflow from the Actions tab with a version input to rehearse: it builds and uploads the archives as workflow artifacts but publishes nothing.
+
+- **Six targets, all cross-published from one Linux runner**: `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, `win-x64`, `win-arm64`. A self-contained non-AOT publish does not need a matching host, and a Unix host is what keeps the executable bit inside the archives — do not move the Unix targets onto a Windows runner.
+- **Publish flags are release packaging concerns and live in the workflow, not the csproj**: `--self-contained` (no .NET runtime on the user's machine), `PublishSingleFile` + `EnableCompressionInSingleFile` (one ~35 MB executable), `InvariantGlobalization=true` (drops the libicu dependency — without it the binary dies with an ICU error on a minimal image), `DebugType=embedded` (stack traces keep line numbers, no separate `.pdb` to ship).
+- **Not trimmed**, deliberately: the configuration binder and Serilog's settings provider resolve types by reflection, and trimming breaks them silently.
+- A build step runs the `linux-x64` binary inside a stock `ubuntu:24.04` container and asserts it prints the tagged version. That is the self-containment claim, tested rather than assumed — keep it.
+- `appsettings.Development.json` is `CopyToPublishDirectory=Never`, so developer overrides never reach a user.
+- Binaries are unsigned; the release notes tell macOS users about `xattr -d com.apple.quarantine` and Windows users about SmartScreen. Signing is the obvious next step if that becomes a problem.
 
 ---
 

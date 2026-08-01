@@ -7,7 +7,15 @@ namespace Share.Application.Abstractions.Configuration;
 /// </summary>
 /// <param name="BaseUrl">Root address of the Share API.</param>
 /// <param name="TimeoutSeconds">Per-request timeout in seconds.</param>
-public sealed record ShareApiSettings(Uri? BaseUrl, int? TimeoutSeconds)
+/// <param name="ApiKey">
+/// Secret sent as the <c>X-Api-Key</c> header. Never put this on a response, in a log or in
+/// an error message — it leaves the store only to be written straight back to the file.
+/// </param>
+/// <param name="UserId">
+/// The user new shares are created for. Configured once rather than passed on every
+/// command; <c>share create --user-id</c> overrides it for a single run.
+/// </param>
+public sealed record ShareApiSettings(Uri? BaseUrl, int? TimeoutSeconds, string? ApiKey, Guid? UserId)
 {
-    public static ShareApiSettings Empty { get; } = new(null, null);
+    public static ShareApiSettings Empty { get; } = new(null, null, null, null);
 }

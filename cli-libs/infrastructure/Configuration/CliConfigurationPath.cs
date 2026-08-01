@@ -18,7 +18,7 @@ public static class CliConfigurationPath
     /// </summary>
     public const string OverrideEnvironmentVariable = "SHARE_CLI_CONFIG";
 
-    private const string DirectoryName = ".share";
+    private const string DirectoryName = ".shareit";
     private const string FileName = "config.yaml";
 
     public static string Resolve()

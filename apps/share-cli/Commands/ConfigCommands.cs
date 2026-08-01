@@ -46,11 +46,15 @@ public class ConfigCommands(IServiceProvider serviceProvider)
     /// </summary>
     /// <param name="baseUrl">-u, Root address of the Share API, e.g. https://api.example.com.</param>
     /// <param name="timeoutSeconds">-t, Per-request timeout in seconds (1-3600).</param>
+    /// <param name="apiKey">-k, API key sent as X-Api-Key. Stored in the configuration file, which is owner-readable only.</param>
+    /// <param name="userId">-i, Owner new shares are created for.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [Command("set")]
     public async Task<int> Set(
         string? baseUrl = null,
         int? timeoutSeconds = null,
+        string? apiKey = null,
+        Guid? userId = null,
         CancellationToken cancellationToken = default)
     {
         Uri? parsedBaseUrl = null;
@@ -71,7 +75,7 @@ public class ConfigCommands(IServiceProvider serviceProvider)
                 .GetRequiredService<ICommandHandler<SetConfigurationCommand, ConfigurationResponse>>();
 
         Result<ConfigurationResponse> result = await handler.Handle(
-            new SetConfigurationCommand(parsedBaseUrl, timeoutSeconds),
+            new SetConfigurationCommand(parsedBaseUrl, timeoutSeconds, apiKey, userId),
             cancellationToken);
 
         if (result.IsFailure)
@@ -111,6 +115,13 @@ public class ConfigCommands(IServiceProvider serviceProvider)
             $"ShareApi:BaseUrl        {configuration.BaseUrl}{Suffix(configuration.BaseUrlIsDefault)}");
         Console.WriteLine(
             $"ShareApi:TimeoutSeconds {configuration.TimeoutSeconds.ToString(CultureInfo.InvariantCulture)}{Suffix(configuration.TimeoutSecondsIsDefault)}");
+
+        // Presence only — printing the key would put a secret on the terminal, into scrollback
+        // and into any transcript the user pastes when asking for help.
+        Console.WriteLine(
+            $"ShareApi:ApiKey         {(configuration.ApiKeyIsSet ? "set" : "not set")}");
+        Console.WriteLine(
+            $"ShareApi:UserId         {configuration.UserId?.ToString() ?? "not set"}");
     }
 
     private static string Suffix(bool isDefault) => isDefault ? "  (default)" : string.Empty;

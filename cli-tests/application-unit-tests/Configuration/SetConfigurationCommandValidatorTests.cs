@@ -9,8 +9,12 @@ public class SetConfigurationCommandValidatorTests
 {
     private readonly SetConfigurationCommandValidator _validator = new();
 
-    private ValidationResult Validate(Uri? baseUrl, int? timeoutSeconds) =>
-        _validator.Validate(new SetConfigurationCommand(baseUrl, timeoutSeconds));
+    private ValidationResult Validate(
+        Uri? baseUrl,
+        int? timeoutSeconds,
+        string? apiKey = null,
+        Guid? userId = null) =>
+        _validator.Validate(new SetConfigurationCommand(baseUrl, timeoutSeconds, apiKey, userId));
 
     [Fact]
     public void Validate_Should_Fail_WhenNothingIsBeingSet()
@@ -57,6 +61,42 @@ public class SetConfigurationCommandValidatorTests
     public void Validate_Should_Pass_WhenTimeoutIsInRange(int timeoutSeconds)
     {
         ValidationResult result = Validate(baseUrl: null, timeoutSeconds);
+
+        result.IsValid.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Validate_Should_Fail_WhenApiKeyIsBlank(string apiKey)
+    {
+        ValidationResult result = Validate(baseUrl: null, timeoutSeconds: null, apiKey);
+
+        result.IsValid.ShouldBeFalse();
+        result.Errors.ShouldContain(error => error.ErrorMessage == "ApiKey must not be blank.");
+    }
+
+    [Fact]
+    public void Validate_Should_Fail_WhenUserIdIsEmpty()
+    {
+        ValidationResult result = Validate(baseUrl: null, timeoutSeconds: null, userId: Guid.Empty);
+
+        result.IsValid.ShouldBeFalse();
+        result.Errors.ShouldContain(error => error.ErrorMessage == "UserId must not be empty.");
+    }
+
+    [Fact]
+    public void Validate_Should_Pass_WhenOnlyTheUserIdIsSet()
+    {
+        ValidationResult result = Validate(baseUrl: null, timeoutSeconds: null, userId: Guid.NewGuid());
+
+        result.IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Validate_Should_Pass_WhenOnlyTheApiKeyIsSet()
+    {
+        ValidationResult result = Validate(baseUrl: null, timeoutSeconds: null, apiKey: "a-key");
 
         result.IsValid.ShouldBeTrue();
     }

@@ -41,6 +41,7 @@ public class GetConfigurationQueryHandlerTests
         result.Value.BaseUrlIsDefault.ShouldBeTrue();
         result.Value.TimeoutSeconds.ShouldBe(ShareApiDefaults.TimeoutSeconds);
         result.Value.TimeoutSecondsIsDefault.ShouldBeTrue();
+        result.Value.ApiKeyIsSet.ShouldBeFalse();
     }
 
     [Fact]
@@ -50,7 +51,7 @@ public class GetConfigurationQueryHandlerTests
         _store.Exists.Returns(true);
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new ShareApiSettings(baseUrl, null)));
+            .Returns(Result.Success(new ShareApiSettings(baseUrl, null, null, null)));
 
         Result<ConfigurationResponse> result = await Handle();
 
@@ -60,6 +61,21 @@ public class GetConfigurationQueryHandlerTests
         result.Value.BaseUrlIsDefault.ShouldBeFalse();
         result.Value.TimeoutSeconds.ShouldBe(ShareApiDefaults.TimeoutSeconds);
         result.Value.TimeoutSecondsIsDefault.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_Should_ReportTheApiKeyAsSet_WithoutRevealingIt()
+    {
+        _store.Exists.Returns(true);
+        _store
+            .ReadAsync(Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new ShareApiSettings(null, null, "super-secret", null)));
+
+        Result<ConfigurationResponse> result = await Handle();
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.ApiKeyIsSet.ShouldBeTrue();
+        result.Value.ToString().ShouldNotContain("super-secret");
     }
 
     [Fact]

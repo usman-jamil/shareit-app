@@ -20,7 +20,9 @@ internal sealed class SetConfigurationCommandHandler(IConfigurationStore store)
 
         var updated = new ShareApiSettings(
             command.BaseUrl ?? current.Value.BaseUrl,
-            command.TimeoutSeconds ?? current.Value.TimeoutSeconds);
+            command.TimeoutSeconds ?? current.Value.TimeoutSeconds,
+            command.ApiKey ?? current.Value.ApiKey,
+            command.UserId ?? current.Value.UserId);
 
         Result saved = await store.SaveAsync(updated, cancellationToken);
 
