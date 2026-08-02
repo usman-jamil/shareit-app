@@ -123,7 +123,7 @@ A self-contained CSR React 19 app built with Vite.
 - **No project references** other than `@share/api-types`. It does not import from `apps/api` or other apps.
 - Consume API types from `@share/api-types`; do not redeclare request/response shapes locally.
 - Dev server runs on **port 3000**; the API runs on **port 5080**.
-- Lint/test/build are driven through Nx (`nx <target> web`). Vite config is in `apps/web/vite.config.mts`; TS config extends `tsconfig.base.json`.
+- Lint/test/build are driven through Nx (`nx <target> web`). Vite config is in `apps/web/vite.config.ts`; TS config extends `tsconfig.base.json`.
 - Add shared, reusable UI/logic as a **new `shared-libs/*`** project (via `nx g @nx/react:lib`) rather than growing cross-app imports.
 
 ---

@@ -1,9 +1,59 @@
 {
   "name": "web",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "apps/web/src",
+  "sourceRoot": "src",
   "projectType": "application",
+  "namedInputs": {
+    "production": [
+      "default",
+      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
+      "!{projectRoot}/**/*.md",
+      "!{projectRoot}/tsconfig.spec.json",
+      "!{projectRoot}/src/test-setup.[jt]s",
+      "!{projectRoot}/.eslintrc.json",
+      "!{projectRoot}/eslint.config.mjs",
+      "!{projectRoot}/cypress/**/*",
+      "!{projectRoot}/**/*.cy.[jt]s?(x)",
+      "!{projectRoot}/cypress.config.[jt]s",
+      "!{projectRoot}/jest.config.[jt]s",
+      "!{projectRoot}/test-setup.[jt]s",
+      "!{projectRoot}/**/*.yml",
+      "!{projectRoot}/stories/**/*"
+    ]
+  },
   "tags": [],
-  "// targets": "to see all targets run: nx show project web --web",
-  "targets": {}
+  "targets": {
+    "serve": {
+      "executor": "@nx/vite:dev-server",
+      "inputs": ["production"],
+      "dependsOn": [],
+      "options": {
+        "buildTarget": "web:build"
+      },
+      "configurations": {
+        "development": {},
+        "production": {},
+        "testing": {}
+      },
+      "defaultConfiguration": "development"
+    },
+    "build": {
+      "executor": "@nx/vite:build",
+      "inputs": ["production"],
+      "outputs": ["{workspaceRoot}/dist/apps/web"],
+      "dependsOn": [],
+      "cache": true,
+      "options": {
+        "outputPath": "{workspaceRoot}/dist/apps/web",
+        "configFile": "{workspaceRoot}/apps/web/vite.config.ts",
+        "skipTypeCheck": true
+      },
+      "configurations": {
+        "development": {},
+        "production": {},
+        "testing": {}
+      },
+      "defaultConfiguration": "development"
+    }
+  }
 }

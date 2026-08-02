@@ -1,11 +1,33 @@
 import { StrictMode } from 'react'
-import * as ReactDOM from 'react-dom/client'
-import App from './app/app'
+import { createRoot } from 'react-dom/client'
+import { RouterProvider } from '@tanstack/react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import CssBaseline from '@mui/material/CssBaseline'
+import { ThemeProvider } from '@mui/material/styles'
+import InitColorSchemeScript from '@mui/material/InitColorSchemeScript'
+import { theme } from './theme'
+import { router } from './router'
+import { ToastProvider } from './context/ToastProvider'
 
-const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: false, staleTime: 30_000 },
+  },
+})
 
-root.render(
+const container = document.getElementById('root')
+if (!container) throw new Error('#root missing from index.html')
+
+createRoot(container).render(
   <StrictMode>
-    <App />
+    <InitColorSchemeScript attribute="class" defaultMode="dark" />
+    <ThemeProvider theme={theme} defaultMode="dark">
+      <CssBaseline />
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>
 )
