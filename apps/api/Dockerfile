@@ -10,10 +10,10 @@ WORKDIR /src
 # Central Package Management: restore cannot resolve versions without these.
 COPY ["Directory.Packages.props", "Directory.Build.props", "./"]
 COPY ["apps/api/Api.csproj", "apps/api/"]
-COPY ["api-libs/infrastructure/Infrastructure.csproj", "api-libs/infrastructure/"]
-COPY ["api-libs/application/Application.csproj", "api-libs/application/"]
-COPY ["api-libs/domain/Domain.csproj", "api-libs/domain/"]
-COPY ["shared-libs/shared-kernal/SharedKernel.csproj", "shared-libs/shared-kernal/"]
+COPY ["libs/api/infrastructure/Infrastructure.csproj", "libs/api/infrastructure/"]
+COPY ["libs/api/application/Application.csproj", "libs/api/application/"]
+COPY ["libs/api/domain/Domain.csproj", "libs/api/domain/"]
+COPY ["libs/shared/shared-kernal/SharedKernel.csproj", "libs/shared/shared-kernal/"]
 RUN dotnet restore "apps/api/Api.csproj"
 COPY . .
 WORKDIR "/src/apps/api"

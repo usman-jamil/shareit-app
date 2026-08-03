@@ -18,26 +18,26 @@
   <Folder Name="/apps/share-cli/">
     <Project Path="apps/share-cli/Share.Cli.csproj" />
   </Folder>
-  <Folder Name="/api-libs/">
-    <Project Path="api-libs/application/Application.csproj" />
-    <Project Path="api-libs/domain/Domain.csproj" />
-    <Project Path="api-libs/infrastructure/Infrastructure.csproj" />
+  <Folder Name="/libs/api/">
+    <Project Path="libs/api/application/Application.csproj" />
+    <Project Path="libs/api/domain/Domain.csproj" />
+    <Project Path="libs/api/infrastructure/Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/cli-libs/">
-    <Project Path="cli-libs/api-types/Share.Api.Types.csproj" />
-    <Project Path="cli-libs/application/Share.Application.csproj" />
-    <Project Path="cli-libs/domain/Share.Domain.csproj" />
-    <Project Path="cli-libs/infrastructure/Share.Infrastructure.csproj" />
+  <Folder Name="/libs/share-cli/">
+    <Project Path="libs/share-cli/api-types/Share.Api.Types.csproj" />
+    <Project Path="libs/share-cli/application/Share.Application.csproj" />
+    <Project Path="libs/share-cli/domain/Share.Domain.csproj" />
+    <Project Path="libs/share-cli/infrastructure/Share.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/shared-libs/">
-    <Project Path="shared-libs/shared-kernal/SharedKernel.csproj" />
+  <Folder Name="/libs/shared/">
+    <Project Path="libs/shared/shared-kernal/SharedKernel.csproj" />
   </Folder>
-  <Folder Name="/api-tests/">
-    <Project Path="api-tests\application-unit-tests\Application.UnitTests.csproj" />
-    <Project Path="api-tests\application-integration-tests\Application.IntegrationTests.csproj" />
+  <Folder Name="/tests/api/">
+    <Project Path="tests/api/application-unit-tests\Application.UnitTests.csproj" />
+    <Project Path="tests/api/application-integration-tests\Application.IntegrationTests.csproj" />
   </Folder>
-  <Folder Name="/cli-tests/">
-    <Project Path="cli-tests\application-unit-tests\Share.Application.UnitTests.csproj" />
-    <Project Path="cli-tests\infrastructure-unit-tests\Share.Infrastructure.UnitTests.csproj" />
+  <Folder Name="/tests/share-cli/">
+    <Project Path="tests/share-cli/application-unit-tests\Share.Application.UnitTests.csproj" />
+    <Project Path="tests/share-cli/infrastructure-unit-tests\Share.Infrastructure.UnitTests.csproj" />
   </Folder>
 </Solution>

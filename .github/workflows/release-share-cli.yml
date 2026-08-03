@@ -83,8 +83,8 @@ jobs:
       # bearing on whether these binaries are fit to ship.
       - name: Test the CLI stack
         run: |
-          dotnet test --project cli-tests/application-unit-tests/Share.Application.UnitTests.csproj --configuration Release
-          dotnet test --project cli-tests/infrastructure-unit-tests/Share.Infrastructure.UnitTests.csproj --configuration Release
+          dotnet test --project tests/share-cli/application-unit-tests/Share.Application.UnitTests.csproj --configuration Release
+          dotnet test --project tests/share-cli/infrastructure-unit-tests/Share.Infrastructure.UnitTests.csproj --configuration Release
 
   build:
     name: Build ${{ matrix.rid }}

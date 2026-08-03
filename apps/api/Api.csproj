@@ -45,7 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\api-libs\infrastructure\Infrastructure.csproj" />
+    <ProjectReference Include="..\..\libs\api\infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

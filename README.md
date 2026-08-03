@@ -395,8 +395,8 @@ dotnet user-secrets set "Storage:BucketName" "$R2_BUCKET_NAME"
 
 ```bash
 # On the root directory generate migrations if needed
-dotnet ef migrations add Initial --project api-libs/infrastructure --startup-project apps/api
+dotnet ef migrations add Initial --project libs/api/infrastructure --startup-project apps/api
 
 # Apply the migrations
-dotnet ef database update --project api-libs/infrastructure --startup-project apps/api
+dotnet ef database update --project libs/api/infrastructure --startup-project apps/api
 ```

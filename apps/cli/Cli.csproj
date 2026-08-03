@@ -47,8 +47,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\api-libs\application\Application.csproj" />
-    <ProjectReference Include="..\..\api-libs\infrastructure\Infrastructure.csproj" />
+    <ProjectReference Include="..\..\libs\api\application\Application.csproj" />
+    <ProjectReference Include="..\..\libs\api\infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -27,6 +27,7 @@ ConsoleApp.ConsoleAppBuilder consoleApp = ConsoleApp.Create();
 
 consoleApp.Add<PingCommands>();
 consoleApp.Add<ShareCommands>();
+consoleApp.Add<UpdateCommands>();
 consoleApp.Add<ConfigCommands>("config");
 
 await consoleApp.RunAsync(args);

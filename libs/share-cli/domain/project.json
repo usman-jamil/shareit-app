@@ -1,0 +1,10 @@
+{
+  "name": "share-domain",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "command": "dotnet build libs/share-cli/domain/Share.Domain.csproj -c Release"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "openApiPath": "http://localhost:5080/openapi/v1.json",
   "namespace": "Share.Api.Types",
-  "outputFolder": "./cli-libs/api-types",
+  "outputFolder": "./libs/share-cli/api-types",
   "useCancellationTokens": true
 }

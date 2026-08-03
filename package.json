@@ -8,8 +8,8 @@
   "scripts": {
     "serve:api": "nx serve api",
     "gen:types:refitter": "refitter --settings-file .refitter --skip-validation",
-    "gen:types": "openapi-typescript http://localhost:5080/openapi/v1.json -o api-libs/api-types/src/lib/schema.ts",
-    "gen:types:local": "openapi-typescript apps/api/Api.json -o api-libs/api-types/src/lib/schema.ts",
+    "gen:types": "openapi-typescript http://localhost:5080/openapi/v1.json -o libs/api/api-types/src/lib/schema.ts",
+    "gen:types:local": "openapi-typescript apps/api/Api.json -o libs/api/api-types/src/lib/schema.ts",
     "generate:api-types": "start-server-and-test serve:api http-get://localhost:5080/openapi/v1.json gen:types",
     "generate:refitter-types": "start-server-and-test serve:api http-get://localhost:5080/openapi/v1.json gen:types:refitter",
     "lint:all": "nx run-many -t lint --all"
