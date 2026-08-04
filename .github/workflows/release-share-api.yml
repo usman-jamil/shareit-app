@@ -1,0 +1,209 @@
+name: Release Share API
+
+# Builds the API (apps/api/Dockerfile) as a container image and pushes it to Docker Hub.
+#
+# Tagging `shareapi-1.2.3` (or `shareapi-v1.2.3-beta.1`) builds the image and pushes
+# `musmanbhatti/shareit-app:1.2.3`; a stable version also moves `:latest`.
+# `workflow_dispatch` runs the same build and smoke test but pushes nothing, so a release can
+# be rehearsed before it is tagged.
+#
+# Requires two repository secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a Docker Hub
+# access token with Read & Write scope, not the account password).
+
+on:
+  push:
+    tags:
+      - 'shareapi-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. 1.2.3 or 1.2.3-beta.1. Dry run — nothing is pushed.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-share-api-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '10.x'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  IMAGE: musmanbhatti/shareit-app
+  DOCKERFILE: apps/api/Dockerfile
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - name: Resolve the version from the tag or the dispatch input
+        id: resolve
+        env:
+          # Through the environment rather than inline `${{ }}`: a tag name is attacker-supplied
+          # text and must never be pasted into a shell script.
+          RAW_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          raw="$RAW_VERSION"
+          if [ "$EVENT_NAME" != "workflow_dispatch" ]; then
+            raw="${raw#shareapi-}"
+          fi
+          version="${raw#v}"
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$version' is not a valid version. Tag as shareapi-1.2.3 or shareapi-v1.2.3-beta.1."
+            exit 1
+          fi
+
+          prerelease=false
+          case "$version" in
+            *-*) prerelease=true ;;
+          esac
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Share API $version (prerelease: $prerelease)" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # The integration tests spin up their own PostgreSQL with Testcontainers, which the
+      # runner's Docker daemon provides — no service container is needed here.
+      - name: Test the API stack
+        run: |
+          dotnet test --project tests/api/application-unit-tests/Application.UnitTests.csproj --configuration Release
+          dotnet test --project tests/api/application-integration-tests/Application.IntegrationTests.csproj --configuration Release
+
+  image:
+    name: Build and push image
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Tags and OCI labels in one place. `latest` only follows stable versions, so a
+      # prerelease can be published without becoming the default pull.
+      - name: Compute tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ needs.version.outputs.version }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.title=Share API
+            org.opencontainers.image.description=Backend API for Share
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+
+      # Built into the runner's Docker daemon first so it can be started and probed. The push
+      # below re-runs the same build, which is a cache hit rather than a second compile.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          load: true
+          tags: ${{ env.IMAGE }}:ci
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Proves the image is actually runnable — right entrypoint, every assembly present —
+      # rather than merely buildable. The database is deliberately absent, so /health answers
+      # 503 Unhealthy; any HTTP response means the host came up and is serving.
+      #
+      # The `Outbox` values are not optional padding: Quartz schedules the outbox job from
+      # them and refuses to start on a zero interval, and they are only in
+      # appsettings.Development.json. Any real deployment has to supply them too.
+      - name: Smoke-test the image
+        run: |
+          set -euo pipefail
+
+          docker run --detach --name share-api-smoke \
+            --publish 8080:8080 \
+            --env ASPNETCORE_ENVIRONMENT=Production \
+            --env 'ConnectionStrings__Database=Host=127.0.0.1;Port=5432;Database=share;Username=postgres;Password=postgres' \
+            --env Outbox__IntervalInSeconds=60 \
+            --env Outbox__BatchSize=10 \
+            "$IMAGE:ci"
+
+          status=""
+          for _ in $(seq 1 30); do
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:8080/health || true)
+            if [ "$status" != "000" ] && [ -n "$status" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          echo "GET /health -> $status"
+          if [ "$status" = "000" ] || [ -z "$status" ]; then
+            echo "::error::The container never served a response on /health."
+            docker logs share-api-smoke || true
+            exit 1
+          fi
+
+      - name: Stop the container
+        if: always()
+        run: docker rm --force share-api-smoke || true
+
+      # Tags publish; a manual run stops here with the build and smoke test done.
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summarise
+        if: github.event_name == 'push'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo '### Pushed'
+            echo
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+            echo
+            echo "\`docker pull $IMAGE:${{ needs.version.outputs.version }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
