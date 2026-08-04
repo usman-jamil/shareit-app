@@ -32,7 +32,7 @@ env:
   DOTNET_VERSION: '10.x'
   DOTNET_NOLOGO: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
-  IMAGE: musmanbhatti/shareit-app
+  IMAGE: musmanbhatti/shareit-api
   DOCKERFILE: apps/api/Dockerfile
 
 jobs:
