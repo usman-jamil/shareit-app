@@ -1,6 +1,10 @@
 name: Release Share API
 
-# Builds the API (apps/api/Dockerfile) as a container image and pushes it to Docker Hub.
+# Builds the single production app image (apps/app-image) and pushes it to Docker Hub.
+#
+# The image is one container serving the whole product on one port: the app host (YARP) at :8080
+# proxying /api to the API on loopback :5000, and serving the built React application everywhere
+# else. See apps/app-image/README.md.
 #
 # Tagging `shareapi-1.2.3` (or `shareapi-v1.2.3-beta.1`) builds the image and pushes
 # `musmanbhatti/shareit-app:1.2.3`; a stable version also moves `:latest`.
@@ -9,6 +13,11 @@ name: Release Share API
 #
 # Requires two repository secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a Docker Hub
 # access token with Read & Write scope, not the account password).
+#
+# Unlike the old API-only image, this one is *artifact packaged*: Nx builds the React app and
+# publishes both .NET applications on the runner, and the Dockerfile only copies the results. That
+# is why this job needs Node as well as .NET, and why the Docker build context is the staged
+# directory `dist/apps/app-image/context` rather than the repository root.
 
 on:
   push:
@@ -32,8 +41,9 @@ env:
   DOTNET_VERSION: '10.x'
   DOTNET_NOLOGO: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
-  IMAGE: musmanbhatti/shareit-api
-  DOCKERFILE: apps/api/Dockerfile
+  IMAGE: musmanbhatti/shareit-app
+  # Written by `nx run app-image:build`; holds the Dockerfile and the three build outputs.
+  CONTEXT: dist/apps/app-image/context
 
 jobs:
   version:
@@ -98,6 +108,50 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Needed for `nx build web`. The version follows .nvmrc so CI and developers agree.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      # One command produces all three artifacts, through the Nx task graph:
+      #   web:build + api:publish + app-image:build-host  ->  app-image:build (stages the context)
+      #
+      # APP_IMAGE_VERSION stamps the release version into the app host assembly. The API assembly
+      # keeps the version pinned in apps/api/Api.csproj: an explicit <Version> in a project file
+      # beats an MSBuild environment variable, and the inferred `api:publish` target takes no extra
+      # arguments. Making it follow the tag needs a one-line change in Api.csproj —
+      # `<Version Condition="'$(Version)' == ''">0.1.0</Version>` — after which exporting Version
+      # here would stamp it too. The release itself is identified by the image tag and the OCI
+      # labels below, both of which do carry the version.
+      - name: Build the image artifacts
+        env:
+          APP_IMAGE_VERSION: ${{ needs.version.outputs.version }}
+        run: npx nx run app-image:build --skip-nx-cache
+
+      - name: Verify the staged context
+        run: |
+          set -euo pipefail
+
+          for required in Dockerfile app.env docker-entrypoint.sh web/index.html; do
+            if [ ! -e "$CONTEXT/$required" ]; then
+              echo "::error::$CONTEXT/$required is missing; the staging step did not produce a complete context."
+              exit 1
+            fi
+          done
+
+          echo "Staged assemblies:"
+          cat "$CONTEXT/app.env"
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -112,62 +166,105 @@ jobs:
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=latest,enable=${{ needs.version.outputs.prerelease == 'false' }}
           labels: |
-            org.opencontainers.image.title=Share API
-            org.opencontainers.image.description=Backend API for Share
+            org.opencontainers.image.title=Share
+            org.opencontainers.image.description=Share web application and API in a single container
             org.opencontainers.image.version=${{ needs.version.outputs.version }}
 
       # Built into the runner's Docker daemon first so it can be started and probed. The push
-      # below re-runs the same build, which is a cache hit rather than a second compile.
+      # below re-runs the same build, which is a cache hit rather than a second copy.
       - name: Build
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ${{ env.DOCKERFILE }}
+          context: ${{ env.CONTEXT }}
+          file: ${{ env.CONTEXT }}/Dockerfile
           load: true
           tags: ${{ env.IMAGE }}:ci
-          build-args: |
-            VERSION=${{ needs.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Proves the image is actually runnable — right entrypoint, every assembly present —
-      # rather than merely buildable. The database is deliberately absent, so /health answers
-      # 503 Unhealthy; any HTTP response means the host came up and is serving.
+      # Proves the image is runnable and that all three artifacts are present and wired to each
+      # other, rather than merely buildable. Each probe below fails for a different reason:
       #
-      # The `Outbox` values are not optional padding: Quartz schedules the outbox job from
-      # them and refuses to start on a zero interval, and they are only in
-      # appsettings.Development.json. Any real deployment has to supply them too.
+      #   /health       the app host process is up                     -> 200
+      #   /             the React build was packaged and is served     -> 200 text/html
+      #   /api/health   the proxy reaches the API process on loopback  -> 503, see below
+      #
+      # The database is deliberately absent, so the API's own health check reports Unhealthy and
+      # answers 503. That is the *right* answer here: a 503 body from the API proves the request
+      # crossed the proxy, while a 502 or a timeout would mean the API never started. The app
+      # host's own /health/ready reports Degraded-but-ready for exactly this case, so it stays 200.
+      #
+      # ConnectionStrings__Database and Outbox__* are not padding. The API aborts at startup
+      # without them — Quartz refuses a zero outbox interval — and the entrypoint would then take
+      # the whole container down. They live only in appsettings.Development.json, so any real
+      # deployment has to supply them too. See apps/app-image/README.md.
       - name: Smoke-test the image
         run: |
           set -euo pipefail
 
-          docker run --detach --name share-api-smoke \
+          docker run --detach --name share-app-smoke \
             --publish 8080:8080 \
-            --env ASPNETCORE_ENVIRONMENT=Production \
             --env 'ConnectionStrings__Database=Host=127.0.0.1;Port=5432;Database=share;Username=postgres;Password=postgres' \
             --env Outbox__IntervalInSeconds=60 \
             --env Outbox__BatchSize=10 \
+            --env Share__ConfiguredTtlMinutes=60 \
             "$IMAGE:ci"
 
-          status=""
+          probe() {
+            curl --silent --output /dev/null --write-out '%{http_code}' "http://localhost:8080$1" || echo 000
+          }
+
           for _ in $(seq 1 30); do
-            status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:8080/health || true)
-            if [ "$status" != "000" ] && [ -n "$status" ]; then
-              break
-            fi
+            [ "$(probe /health)" = "200" ] && break
             sleep 2
           done
 
-          echo "GET /health -> $status"
-          if [ "$status" = "000" ] || [ -z "$status" ]; then
-            echo "::error::The container never served a response on /health."
-            docker logs share-api-smoke || true
+          failed=0
+          check() {
+            local path="$1" expected="$2" actual
+            actual=$(probe "$path")
+            echo "GET $path -> $actual (expected $expected)"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::GET $path returned $actual, expected $expected."
+              failed=1
+            fi
+          }
+
+          check /health 200          # app host liveness
+          check /health/ready 200    # web root present, API reachable
+          check / 200                # React index.html
+          check /api/health 503      # reaches the API, which has no database here
+          check /some/client/route 200   # SPA fallback
+          check /assets/missing.js 404   # a missing file is a 404, not the SPA document
+
+          # Both processes must still be running: the entrypoint stops the container if either dies.
+          running=$(docker exec share-app-smoke sh -c 'pgrep -c dotnet' || echo 0)
+          echo "dotnet processes running: $running (expected 2)"
+          [ "$running" = "2" ] || { echo "::error::Expected two .NET processes in the container."; failed=1; }
+
+          if [ "$failed" != "0" ]; then
+            docker logs share-app-smoke || true
+            exit 1
+          fi
+
+      # Also a test: a clean stop must drain both children and exit 0, not be killed by Docker's
+      # 10-second timeout. A non-zero code here means the entrypoint failed to forward SIGTERM.
+      - name: Check clean shutdown
+        run: |
+          set -euo pipefail
+
+          docker stop share-app-smoke > /dev/null
+          code=$(docker inspect share-app-smoke --format '{{.State.ExitCode}}')
+          echo "container exit code after docker stop: $code"
+          if [ "$code" != "0" ]; then
+            echo "::error::The container exited $code on SIGTERM; expected a clean 0."
+            docker logs share-app-smoke || true
             exit 1
           fi
 
       - name: Stop the container
         if: always()
-        run: docker rm --force share-api-smoke || true
+        run: docker rm --force share-app-smoke || true
 
       # Tags publish; a manual run stops here with the build and smoke test done.
       - name: Log in to Docker Hub
@@ -181,13 +278,11 @@ jobs:
         if: github.event_name == 'push'
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ${{ env.DOCKERFILE }}
+          context: ${{ env.CONTEXT }}
+          file: ${{ env.CONTEXT }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ needs.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -206,4 +301,7 @@ jobs:
             echo '```'
             echo
             echo "\`docker pull $IMAGE:${{ needs.version.outputs.version }}\`"
+            echo
+            echo 'Runs the web app and the API in one container on port 8080.'
+            echo 'Required configuration is listed in `apps/app-image/README.md`.'
           } >> "$GITHUB_STEP_SUMMARY"

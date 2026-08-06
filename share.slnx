@@ -12,6 +12,9 @@
   <Folder Name="/apps/api/">
     <Project Path="apps/api/Api.csproj" />
   </Folder>
+  <Folder Name="/apps/app-image/">
+    <Project Path="apps/app-image/AppImage.Host.csproj" />
+  </Folder>
   <Folder Name="/apps/cli/">
     <Project Path="apps/cli/Cli.csproj" />
   </Folder>

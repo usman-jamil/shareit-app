@@ -1,0 +1,62 @@
+{
+  "name": "app-image",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "targets": {
+    "build-host": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "production",
+        "^production",
+        "{workspaceRoot}/.editorconfig",
+        "{workspaceRoot}/Directory.Build.props",
+        "{workspaceRoot}/Directory.Packages.props",
+        { "env": "APP_IMAGE_VERSION" }
+      ],
+      "outputs": ["{workspaceRoot}/dist/apps/app-image/host"],
+      "options": {
+        "command": "dotnet publish apps/app-image/AppImage.Host.csproj -c Release -o dist/apps/app-image/host ${APP_IMAGE_VERSION:+-p:Version=\"$APP_IMAGE_VERSION\"}",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": [
+        "build-host",
+        { "projects": ["web"], "target": "build" },
+        { "projects": ["api"], "target": "publish" }
+      ],
+      "inputs": [
+        "{projectRoot}/Dockerfile",
+        "{projectRoot}/docker-entrypoint.sh",
+        "{projectRoot}/tools/stage-artifacts.sh",
+        { "dependentTasksOutputFiles": "**/*" }
+      ],
+      "outputs": ["{workspaceRoot}/dist/apps/app-image/context"],
+      "options": {
+        "command": "apps/app-image/tools/stage-artifacts.sh",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "docker-build": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": ["build"],
+      "options": {
+        "command": "apps/app-image/tools/docker-build.sh",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "docker-run": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": ["docker-build"],
+      "options": {
+        "command": "apps/app-image/tools/docker-run.sh",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}
