@@ -36,6 +36,7 @@ live in [CLAUDE.md](CLAUDE.md); each module's own README goes deeper where one e
 
 ```bash
 npm ci                                   # workspace dependencies
+dotnet restore share.slnx                # required once; the Nx .NET build targets use --no-restore
 docker compose up -d postgres            # or: nx run infrastructure:compose-up
 ```
 

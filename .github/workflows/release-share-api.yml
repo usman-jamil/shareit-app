@@ -123,6 +123,13 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
 
+      # The @nx/dotnet plugin's inferred `build:release` target runs `dotnet build --no-restore` and
+      # does not itself depend on `restore`, so on a clean checkout there is no
+      # obj/project.assets.json for it to read and it fails with NETSDK1004. A developer's machine
+      # has one left over from earlier builds, which is why this only shows up in CI.
+      - name: Restore .NET dependencies
+        run: dotnet restore share.slnx
+
       # One command produces all three artifacts, through the Nx task graph:
       #   web:build + api:publish + app-image:build-host  ->  app-image:build (stages the context)
       #
