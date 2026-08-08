@@ -9,7 +9,7 @@
     <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)</OpenApiDocumentsDirectory>
     <UserSecretsId>359e3d35-41a6-423a-a69f-f21435c22d2d</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-    <Version>0.1.0</Version>
+    <Version>0.1.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
