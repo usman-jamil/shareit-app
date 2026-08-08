@@ -31,11 +31,23 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        string connectionString = $"{_dbContainer.GetConnectionString()};Pooling=False";
+
+        // The host reads these at startup, before ConfigureTestServices can swap
+        // anything out. On a developer machine they come from user secrets, which
+        // do not exist on CI — supply them here so the app boots identically
+        // everywhere. The real values are irrelevant: the database points at the
+        // container below, and the services that consume the rest are faked.
+        builder.UseSetting("ConnectionStrings:Database", connectionString);
+        builder.UseSetting("ApiKey:Pepper", Convert.ToBase64String("integration-tests"u8.ToArray()));
+        builder.UseSetting("Storage:AccessKeyId", "integration-tests");
+        builder.UseSetting("Storage:SecretAccessKey", "integration-tests");
+        builder.UseSetting("Storage:ServiceUrl", "http://localhost");
+        builder.UseSetting("Storage:BucketName", "integration-tests");
+
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll(typeof(DbContextOptions<ApplicationDbContext>));
-
-            string connectionString = $"{_dbContainer.GetConnectionString()};Pooling=False";
 
             services.AddDbContext<ApplicationDbContext>(options =>
                 options

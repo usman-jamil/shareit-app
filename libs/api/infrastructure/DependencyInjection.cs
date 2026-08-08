@@ -52,8 +52,9 @@ public static class DependencyInjection
 
     private static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
-        string? connectionString = configuration.GetConnectionString("Database") ??
-                                   throw new ArgumentNullException(nameof(configuration));
+        string connectionString = configuration.GetConnectionString("Database") ??
+                                  throw new InvalidOperationException(
+                                      "The connection string 'Database' is not configured.");
 
         services.AddDbContext<ApplicationDbContext>(
             options => options
