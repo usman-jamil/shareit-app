@@ -20,16 +20,80 @@ namespace Share.Api.Types
         /// <param name="userId">userId parameter</param>
         /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
         /// <returns>OK</returns>
-        /// <exception cref="ApiException">Thrown when the request returns a non-success status code.</exception>
-        [Headers("Accept: application/json")]
+        /// <exception cref="ApiException">
+        /// Thrown when the request returns a non-success status code:
+        /// <list type="table">
+        /// <listheader>
+        /// <term>Status</term>
+        /// <description>Description</description>
+        /// </listheader>
+        /// <item>
+        /// <term>400</term>
+        /// <description>Bad Request</description>
+        /// </item>
+        /// <item>
+        /// <term>401</term>
+        /// <description>Unauthorized</description>
+        /// </item>
+        /// <item>
+        /// <term>403</term>
+        /// <description>Forbidden</description>
+        /// </item>
+        /// <item>
+        /// <term>404</term>
+        /// <description>Not Found</description>
+        /// </item>
+        /// <item>
+        /// <term>409</term>
+        /// <description>Conflict</description>
+        /// </item>
+        /// <item>
+        /// <term>500</term>
+        /// <description>Internal Server Error</description>
+        /// </item>
+        /// </list>
+        /// </exception>
+        [Headers("Accept: application/json, application/problem+json")]
         [Get("/users/{userId}")]
         Task<UserResponse> Users(System.Guid userId, CancellationToken cancellationToken = default);
 
         /// <param name="body">body parameter</param>
         /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
         /// <returns>OK</returns>
-        /// <exception cref="ApiException">Thrown when the request returns a non-success status code.</exception>
-        [Headers("Accept: application/json", "Content-Type: application/json")]
+        /// <exception cref="ApiException">
+        /// Thrown when the request returns a non-success status code:
+        /// <list type="table">
+        /// <listheader>
+        /// <term>Status</term>
+        /// <description>Description</description>
+        /// </listheader>
+        /// <item>
+        /// <term>400</term>
+        /// <description>Bad Request</description>
+        /// </item>
+        /// <item>
+        /// <term>401</term>
+        /// <description>Unauthorized</description>
+        /// </item>
+        /// <item>
+        /// <term>403</term>
+        /// <description>Forbidden</description>
+        /// </item>
+        /// <item>
+        /// <term>404</term>
+        /// <description>Not Found</description>
+        /// </item>
+        /// <item>
+        /// <term>409</term>
+        /// <description>Conflict</description>
+        /// </item>
+        /// <item>
+        /// <term>500</term>
+        /// <description>Internal Server Error</description>
+        /// </item>
+        /// </list>
+        /// </exception>
+        [Headers("Accept: application/json, application/problem+json", "Content-Type: application/json")]
         [Post("/shares")]
         Task<CreateShareResponse> SharesPost([Body] Request body, CancellationToken cancellationToken = default);
 
@@ -43,8 +107,40 @@ namespace Share.Api.Types
         /// <param name="shareId">shareId parameter</param>
         /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
         /// <returns>OK</returns>
-        /// <exception cref="ApiException">Thrown when the request returns a non-success status code.</exception>
-        [Headers("Accept: application/json")]
+        /// <exception cref="ApiException">
+        /// Thrown when the request returns a non-success status code:
+        /// <list type="table">
+        /// <listheader>
+        /// <term>Status</term>
+        /// <description>Description</description>
+        /// </listheader>
+        /// <item>
+        /// <term>400</term>
+        /// <description>Bad Request</description>
+        /// </item>
+        /// <item>
+        /// <term>401</term>
+        /// <description>Unauthorized</description>
+        /// </item>
+        /// <item>
+        /// <term>403</term>
+        /// <description>Forbidden</description>
+        /// </item>
+        /// <item>
+        /// <term>404</term>
+        /// <description>Not Found</description>
+        /// </item>
+        /// <item>
+        /// <term>409</term>
+        /// <description>Conflict</description>
+        /// </item>
+        /// <item>
+        /// <term>500</term>
+        /// <description>Internal Server Error</description>
+        /// </item>
+        /// </list>
+        /// </exception>
+        [Headers("Accept: application/json, application/problem+json")]
         [Get("/shares/{shareId}")]
         Task<ShareResponse> SharesGet(System.Guid shareId, CancellationToken cancellationToken = default);
 
@@ -180,6 +276,71 @@ namespace Share.Api.Types
         [JsonPropertyName("uploadUrl")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public System.Uri UploadUrl { get; set; }
+
+        private IDictionary<string, object> _additionalProperties;
+
+        [JsonExtensionData]
+        public IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class HttpValidationProblemDetails
+    {
+
+        [JsonPropertyName("type")]
+        public string Type { get; set; }
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; }
+
+        [JsonPropertyName("status")]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
+        public int? Status { get; set; }
+
+        [JsonPropertyName("detail")]
+        public string Detail { get; set; }
+
+        [JsonPropertyName("instance")]
+        public string Instance { get; set; }
+
+        [JsonPropertyName("errors")]
+        public IDictionary<string, ICollection<string>> Errors { get; set; }
+
+        private IDictionary<string, object> _additionalProperties;
+
+        [JsonExtensionData]
+        public IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ProblemDetails
+    {
+
+        [JsonPropertyName("type")]
+        public string Type { get; set; }
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; }
+
+        [JsonPropertyName("status")]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
+        public int? Status { get; set; }
+
+        [JsonPropertyName("detail")]
+        public string Detail { get; set; }
+
+        [JsonPropertyName("instance")]
+        public string Instance { get; set; }
 
         private IDictionary<string, object> _additionalProperties;
 

@@ -21,7 +21,7 @@ internal sealed class GetById : IEndpoint
 
                 return result.Match(Results.Ok, CustomResults.Problem);
             })
-            .Produces<ShareResponse>()
+            .ProducesResult<ShareResponse>()
             .RequireApiKey()
             .WithTags(Tags.Shares);
     }

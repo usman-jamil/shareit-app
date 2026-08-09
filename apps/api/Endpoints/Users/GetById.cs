@@ -21,7 +21,7 @@ public class GetById : IEndpoint
 
                 return result.Match(Results.Ok, CustomResults.Problem);
             })
-            .Produces<UserResponse>()
+            .ProducesResult<UserResponse>()
             .RequireApiKey()
             .WithTags(Tags.Users);
     }
