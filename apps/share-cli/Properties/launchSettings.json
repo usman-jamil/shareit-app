@@ -14,6 +14,20 @@
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }
+    },
+    "config-path": {
+      "commandName": "Project",
+      "commandLineArgs": "config show",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "create-share": {
+      "commandName": "Project",
+      "commandLineArgs": "create -p /Users/usmanjamil/Desktop/Clark",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
     }
   }
 }

@@ -17,9 +17,14 @@
     },
     "createApiKey": {
       "commandName": "Project",
-      "commandLineArgs": "create-api-key --user-id 376b8700-8838-433d-911a-24aeb36e69d3",
+      "commandLineArgs": "create-api-key --user-id 4595eb32-3fe9-4182-8de6-bd57f8d56a7e",
       "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Production",
+        "ConnectionStrings__Database": "fill-here",
+        "Storage__AccessKeyId": "temp",
+        "Storage__SecretAccessKey": "temp",
+        "Storage__ServiceUrl": "temp",
+        "Storage__BucketName": "temp"
       }
     },
     "validateApiKey": {

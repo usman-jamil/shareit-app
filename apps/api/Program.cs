@@ -4,6 +4,7 @@ using Api.Extensions;
 using Application;
 using HealthChecks.UI.Client;
 using Infrastructure;
+using Infrastructure.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 
@@ -25,7 +26,10 @@ builder.Services
     .AddPresentation()
     .AddInfrastructure(builder.Configuration);
 
-builder.Services.AddAuthentication();
+builder.Services
+    .AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
+    .AddScheme<ApiKeyAuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization();
 
 builder.Services.AddEndpoints(Assembly.GetExecutingAssembly());
