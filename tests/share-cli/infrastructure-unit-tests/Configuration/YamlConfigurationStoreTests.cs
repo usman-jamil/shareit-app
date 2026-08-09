@@ -10,6 +10,7 @@ namespace Share.Infrastructure.UnitTests.Configuration;
 /// Exercises the real file, redirected with <c>SHARE_CLI_CONFIG</c> so the developer's own
 /// <c>~/.share/config.yaml</c> is never touched.
 /// </summary>
+[Collection(ConfigurationFileCollection.Name)]
 public sealed class YamlConfigurationStoreTests : IDisposable
 {
     private static readonly Guid UserId = new("11111111-1111-1111-1111-111111111111");
@@ -51,13 +52,13 @@ public sealed class YamlConfigurationStoreTests : IDisposable
 
         saved.IsSuccess.ShouldBeTrue();
 
-        Result<ShareApiSettings> read = await store.ReadAsync(TestContext.Current.CancellationToken);
+        Result<ActiveWorkspace> read = await store.ReadAsync(TestContext.Current.CancellationToken);
 
         read.IsSuccess.ShouldBeTrue();
-        read.Value.ApiKey.ShouldBe("sk_live_secret");
-        read.Value.BaseUrl.ShouldBe(new Uri("https://api.example.com"));
-        read.Value.TimeoutSeconds.ShouldBe(45);
-        read.Value.UserId.ShouldBe(UserId);
+        read.Value.Settings.ApiKey.ShouldBe("sk_live_secret");
+        read.Value.Settings.BaseUrl.ShouldBe(new Uri("https://api.example.com"));
+        read.Value.Settings.TimeoutSeconds.ShouldBe(45);
+        read.Value.Settings.UserId.ShouldBe(UserId);
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public sealed class YamlConfigurationStoreTests : IDisposable
 
         var store = new YamlConfigurationStore();
 
-        Result<ShareApiSettings> read = await store.ReadAsync(TestContext.Current.CancellationToken);
+        Result<ActiveWorkspace> read = await store.ReadAsync(TestContext.Current.CancellationToken);
 
         read.IsFailure.ShouldBeTrue();
         read.Error.Code.ShouldBe("Configuration.InvalidValue");
@@ -89,10 +90,10 @@ public sealed class YamlConfigurationStoreTests : IDisposable
 
         var store = new YamlConfigurationStore();
 
-        Result<ShareApiSettings> read = await store.ReadAsync(TestContext.Current.CancellationToken);
+        Result<ActiveWorkspace> read = await store.ReadAsync(TestContext.Current.CancellationToken);
 
         read.IsSuccess.ShouldBeTrue();
-        read.Value.ApiKey.ShouldBeNull();
+        read.Value.Settings.ApiKey.ShouldBeNull();
     }
 
     [Fact]
@@ -106,10 +107,10 @@ public sealed class YamlConfigurationStoreTests : IDisposable
 
         var store = new YamlConfigurationStore();
 
-        Result<ShareApiSettings> read = await store.ReadAsync(TestContext.Current.CancellationToken);
+        Result<ActiveWorkspace> read = await store.ReadAsync(TestContext.Current.CancellationToken);
 
         read.IsSuccess.ShouldBeTrue();
-        read.Value.ApiKey.ShouldBeNull();
+        read.Value.Settings.ApiKey.ShouldBeNull();
     }
 
     [Fact]

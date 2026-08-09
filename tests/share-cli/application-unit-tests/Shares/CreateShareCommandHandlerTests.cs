@@ -6,6 +6,7 @@ using Share.Application.Abstractions.Storage;
 using Share.Application.Shares.Create;
 using Share.Application.UnitTests.Api;
 using Share.Domain.Api;
+using Share.Domain.Configuration;
 using SharedKernel;
 using Shouldly;
 using Xunit;
@@ -40,7 +41,9 @@ public class CreateShareCommandHandlerTests
 
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new ShareApiSettings(null, null, null, ConfiguredUserId)));
+            .Returns(Result.Success(new ActiveWorkspace(
+                ConfigurationWorkspaces.DefaultName,
+                new ShareApiSettings(null, null, null, ConfiguredUserId))));
 
         Created(Readme, Logo);
     }
@@ -151,7 +154,9 @@ public class CreateShareCommandHandlerTests
     {
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Success(ShareApiSettings.Empty));
+            .Returns(Result.Success(new ActiveWorkspace(
+                ConfigurationWorkspaces.DefaultName,
+                ShareApiSettings.Empty)));
 
         Result<CreateShareResponse> result = await Handle();
 

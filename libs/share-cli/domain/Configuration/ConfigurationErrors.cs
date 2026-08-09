@@ -28,4 +28,20 @@ public static class ConfigurationErrors
     public static Error InvalidValue(string path, string key, string reason) => Error.Failure(
       "Configuration.InvalidValue",
       $"'{key}' in the configuration file at '{path}' is not valid: {reason}");
+
+    /// <summary>
+    /// A workspace was named that the file does not define. Also raised when
+    /// <c>active_workspace</c> points at a section that is not there — falling back to
+    /// defaults would quietly aim the CLI at a different server than the user asked for.
+    /// </summary>
+    public static Error WorkspaceNotFound(string path, string name) => Error.NotFound(
+      "Configuration.WorkspaceNotFound",
+      $"There is no workspace named '{name}' in the configuration file at '{path}'. " +
+      "Run `share config list` to see the workspaces, or `share config create " +
+      $"{name}` to add it.");
+
+    public static Error WorkspaceAlreadyExists(string path, string name) => Error.Conflict(
+      "Configuration.WorkspaceAlreadyExists",
+      $"A workspace named '{name}' already exists in the configuration file at '{path}'. " +
+      $"Run `share config activate {name}` to switch to it.");
 }

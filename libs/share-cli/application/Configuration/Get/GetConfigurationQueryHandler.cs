@@ -11,10 +11,11 @@ internal sealed class GetConfigurationQueryHandler(IConfigurationStore store)
         GetConfigurationQuery query,
         CancellationToken cancellationToken)
     {
-        Result<ShareApiSettings> settings = await store.ReadAsync(cancellationToken);
+        Result<ActiveWorkspace> workspace = await store.ReadAsync(cancellationToken);
 
-        return settings.IsFailure
-            ? Result.Failure<ConfigurationResponse>(settings.Error)
-            : Result.Success(ConfigurationResponse.From(store.Location, store.Exists, settings.Value));
+        return workspace.IsFailure
+            ? Result.Failure<ConfigurationResponse>(workspace.Error)
+            : Result.Success(
+                ConfigurationResponse.From(store.Location, store.Exists, workspace.Value));
     }
 }

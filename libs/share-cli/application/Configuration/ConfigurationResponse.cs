@@ -9,6 +9,9 @@ namespace Share.Application.Configuration;
 /// </summary>
 /// <param name="Location">Absolute path of the configuration file.</param>
 /// <param name="Exists">Whether that file is present.</param>
+/// <param name="Workspace">
+/// The workspace these values came from — the section <c>config set</c> would write to.
+/// </param>
 /// <param name="ApiKeyIsSet">
 /// Whether an API key is configured. The key itself deliberately never leaves the store —
 /// this response is printed to the console, so it carries presence only. There is no
@@ -21,6 +24,7 @@ namespace Share.Application.Configuration;
 public sealed record ConfigurationResponse(
     string Location,
     bool Exists,
+    string Workspace,
     Uri BaseUrl,
     bool BaseUrlIsDefault,
     int TimeoutSeconds,
@@ -28,13 +32,16 @@ public sealed record ConfigurationResponse(
     bool ApiKeyIsSet,
     Guid? UserId)
 {
-    public static ConfigurationResponse From(string location, bool exists, ShareApiSettings settings)
+    public static ConfigurationResponse From(string location, bool exists, ActiveWorkspace workspace)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(workspace);
+
+        ShareApiSettings settings = workspace.Settings;
 
         return new ConfigurationResponse(
             location,
             exists,
+            workspace.Name,
             settings.BaseUrl ?? ShareApiDefaults.BaseUrl,
             settings.BaseUrl is null,
             settings.TimeoutSeconds ?? ShareApiDefaults.TimeoutSeconds,

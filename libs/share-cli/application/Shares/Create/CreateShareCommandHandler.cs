@@ -89,14 +89,16 @@ internal sealed class CreateShareCommandHandler(
             return Result.Success(explicitOwner);
         }
 
-        Result<ShareApiSettings> settings = await configurationStore.ReadAsync(cancellationToken);
+        // Reads the active workspace, so `share create` follows `share config activate`
+        // without the command line saying anything about workspaces.
+        Result<ActiveWorkspace> workspace = await configurationStore.ReadAsync(cancellationToken);
 
-        if (settings.IsFailure)
+        if (workspace.IsFailure)
         {
-            return Result.Failure<Guid>(settings.Error);
+            return Result.Failure<Guid>(workspace.Error);
         }
 
-        return settings.Value.UserId is { } configuredOwner
+        return workspace.Value.Settings.UserId is { } configuredOwner
             ? Result.Success(configuredOwner)
             : Result.Failure<Guid>(ShareErrors.OwnerNotConfigured());
     }

@@ -15,9 +15,37 @@
         "DOTNET_ENVIRONMENT": "Development"
       }
     },
-    "config-path": {
+    "config-activate": {
+      "commandName": "Project",
+      "commandLineArgs": "config activate devel",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "config-show": {
       "commandName": "Project",
       "commandLineArgs": "config show",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "config-list": {
+      "commandName": "Project",
+      "commandLineArgs": "config list",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "config-create": {
+      "commandName": "Project",
+      "commandLineArgs": "config create devel",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "config-set": {
+      "commandName": "Project",
+      "commandLineArgs": "config set -u http://localhost:5000/ -k share_40F615F6D768707B_DF241BDE07E86FD9F07BD58A914D1191EDE24FD7D671BB8E525EC54CEF6DF4A4 -i 376b8700-8838-433d-911a-24aeb36e69d3",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }

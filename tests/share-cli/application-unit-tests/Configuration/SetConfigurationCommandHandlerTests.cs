@@ -26,7 +26,7 @@ public class SetConfigurationCommandHandlerTests
         _store.Location.Returns(Location);
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new ShareApiSettings(ExistingBaseUrl, 30, ExistingApiKey, ExistingUserId)));
+            .Returns(Active(new ShareApiSettings(ExistingBaseUrl, 30, ExistingApiKey, ExistingUserId)));
         _store.SaveAsync(Arg.Any<ShareApiSettings>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
@@ -41,6 +41,11 @@ public class SetConfigurationCommandHandlerTests
         _handler.Handle(
             new SetConfigurationCommand(baseUrl, timeoutSeconds, apiKey, userId),
             TestContext.Current.CancellationToken);
+
+    private static Result<ActiveWorkspace> Active(
+        ShareApiSettings settings,
+        string name = ConfigurationWorkspaces.DefaultName) =>
+        Result.Success(new ActiveWorkspace(name, settings));
 
     [Fact]
     public async Task Handle_Should_KeepTheSettingsItWasNotAskedToChange()
@@ -126,7 +131,7 @@ public class SetConfigurationCommandHandlerTests
     {
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new ShareApiSettings(ExistingBaseUrl, 30, null, ExistingUserId)));
+            .Returns(Active(new ShareApiSettings(ExistingBaseUrl, 30, null, ExistingUserId)));
 
         Result<ConfigurationResponse> result = await Handle(NewBaseUrl, timeoutSeconds: null);
 
@@ -140,7 +145,7 @@ public class SetConfigurationCommandHandlerTests
         Error error = ConfigurationErrors.Unparseable(Location, "mapping values are not allowed");
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<ShareApiSettings>(error));
+            .Returns(Result.Failure<ActiveWorkspace>(error));
 
         Result<ConfigurationResponse> result = await Handle(NewBaseUrl, timeoutSeconds: null);
 

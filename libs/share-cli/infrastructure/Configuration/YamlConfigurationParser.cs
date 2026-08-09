@@ -4,33 +4,19 @@ using YamlDotNet.RepresentationModel;
 namespace Share.Infrastructure.Configuration;
 
 /// <summary>
-/// Flattens a YAML document into the flat <c>Section:Key</c> pairs
-/// <see cref="Microsoft.Extensions.Configuration.IConfiguration"/> works in, so
-/// <c>shareApi: { baseUrl: ... }</c> becomes <c>ShareApi:BaseUrl</c>. Used both by the
-/// configuration provider and by the store that reads the file directly.
+/// Flattens a YAML node into the flat <c>Section:Key</c> pairs
+/// <see cref="Microsoft.Extensions.Configuration.IConfiguration"/> works in. Used both by
+/// the configuration provider — which flattens the active workspace under
+/// <c>ShareApi</c> — and by the store, which reads the same node with no prefix at all, so
+/// both see identical values.
 /// </summary>
 internal static class YamlConfigurationParser
 {
-    public static IDictionary<string, string?> Parse(Stream stream)
-    {
-        using var reader = new StreamReader(stream);
-
-        return Parse(reader);
-    }
-
-    public static IDictionary<string, string?> Parse(TextReader reader)
+    public static IDictionary<string, string?> Flatten(YamlNode node, string? prefix = null)
     {
         var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-        var yaml = new YamlStream();
-        yaml.Load(reader);
-
-        if (yaml.Documents.Count == 0)
-        {
-            return data;
-        }
-
-        Visit(data, prefix: null, yaml.Documents[0].RootNode);
+        Visit(data, prefix, node);
 
         return data;
     }

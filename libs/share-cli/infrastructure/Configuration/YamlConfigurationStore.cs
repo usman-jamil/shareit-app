@@ -8,13 +8,12 @@ using YamlDotNet.RepresentationModel;
 namespace Share.Infrastructure.Configuration;
 
 /// <summary>
-/// Reads and writes <c>~/.share/config.yaml</c>. Writes go through a temporary file so an
-/// interrupted save cannot leave a half-written config behind, and unrelated keys in the
-/// file are carried over untouched.
+/// Reads and writes <c>~/.shareit/config.yaml</c>. Writes go through a temporary file so an
+/// interrupted save cannot leave a half-written config behind; the workspaces the write is
+/// not about, and any unrelated keys in the file, are carried over untouched.
 /// </summary>
 internal sealed class YamlConfigurationStore : IConfigurationStore
 {
-    private const string SectionName = "shareApi";
     private const string BaseUrlKey = "baseUrl";
     private const string ApiKeyKey = "apiKey";
     private const string UserIdKey = "userId";
@@ -22,6 +21,8 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
 
     private static readonly string Header =
         "# Share CLI configuration — the source of truth for how the CLI reaches the API." +
+        Environment.NewLine +
+        "# Each root-level section is a workspace; `active_workspace` picks the one in use." +
         Environment.NewLine +
         "# Edit by hand or run `share config set`. Note that `config set` rewrites this" +
         Environment.NewLine +
@@ -34,40 +35,33 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
 
     public bool Exists => File.Exists(Location);
 
-    public async Task<Result<ShareApiSettings>> ReadAsync(
+    public async Task<Result<ActiveWorkspace>> ReadAsync(
         CancellationToken cancellationToken = default)
     {
-        if (!Exists)
+        Result<WorkspaceDocument> document = await LoadAsync(cancellationToken);
+
+        if (document.IsFailure)
         {
-            return Result.Success(ShareApiSettings.Empty);
+            return Result.Failure<ActiveWorkspace>(document.Error);
         }
 
-        string content;
+        string active = document.Value.ActiveWorkspace;
 
-        try
+        // A file pointing at a workspace it does not define is a mistake worth stopping on:
+        // silently defaulting would aim the next command at localhost with no key.
+        if (!document.Value.Contains(active))
         {
-            content = await File.ReadAllTextAsync(Location, cancellationToken);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return Result.Failure<ShareApiSettings>(
-                ConfigurationErrors.Unreadable(Location, exception.Message));
+            return Result.Failure<ActiveWorkspace>(
+                ConfigurationErrors.WorkspaceNotFound(Location, active));
         }
 
-        IDictionary<string, string?> values;
+        Result<ShareApiSettings> settings = BuildSettings(
+            active,
+            YamlConfigurationParser.Flatten(document.Value.Read(active)));
 
-        try
-        {
-            using var reader = new StringReader(content);
-            values = YamlConfigurationParser.Parse(reader);
-        }
-        catch (YamlException exception)
-        {
-            return Result.Failure<ShareApiSettings>(
-                ConfigurationErrors.Unparseable(Location, exception.Message));
-        }
-
-        return BuildSettings(values);
+        return settings.IsFailure
+            ? Result.Failure<ActiveWorkspace>(settings.Error)
+            : Result.Success(new ActiveWorkspace(active, settings.Value));
     }
 
     public async Task<Result> SaveAsync(
@@ -76,32 +70,92 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        Result<YamlMappingNode> root = await LoadRootAsync(cancellationToken);
+        Result<WorkspaceDocument> document = await LoadAsync(cancellationToken);
 
-        if (root.IsFailure)
+        if (document.IsFailure)
         {
-            return Result.Failure(root.Error);
+            return Result.Failure(document.Error);
         }
 
-        YamlMappingNode section = GetOrAddMapping(root.Value, SectionName);
+        string active = document.Value.ActiveWorkspace;
 
-        SetScalar(section, BaseUrlKey, settings.BaseUrl?.ToString());
-        SetScalar(section, ApiKeyKey, settings.ApiKey);
-        SetScalar(section, UserIdKey, settings.UserId?.ToString());
+        if (!document.Value.Contains(active))
+        {
+            return Result.Failure(ConfigurationErrors.WorkspaceNotFound(Location, active));
+        }
+
+        YamlMappingNode workspace = document.Value.GetOrAdd(active);
+
+        SetScalar(workspace, BaseUrlKey, settings.BaseUrl?.ToString());
+        SetScalar(workspace, ApiKeyKey, settings.ApiKey);
+        SetScalar(workspace, UserIdKey, settings.UserId?.ToString());
         SetScalar(
-            section,
+            workspace,
             TimeoutSecondsKey,
             settings.TimeoutSeconds?.ToString(CultureInfo.InvariantCulture));
 
-        if (section.Children.Count == 0)
-        {
-            root.Value.Children.Remove(new YamlScalarNode(SectionName));
-        }
-
-        return await WriteAsync(root.Value, cancellationToken);
+        return await WriteAsync(document.Value, cancellationToken);
     }
 
-    private Result<ShareApiSettings> BuildSettings(IDictionary<string, string?> values)
+    public async Task<Result<WorkspaceList>> ListWorkspacesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        Result<WorkspaceDocument> document = await LoadAsync(cancellationToken);
+
+        // Deliberately does not check that the active workspace exists: listing is how the
+        // user diagnoses a file that names one that does not.
+        return document.IsFailure
+            ? Result.Failure<WorkspaceList>(document.Error)
+            : Result.Success(
+                new WorkspaceList(document.Value.ActiveWorkspace, document.Value.Workspaces));
+    }
+
+    public async Task<Result> CreateWorkspaceAsync(
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        Result<WorkspaceDocument> document = await LoadAsync(cancellationToken);
+
+        if (document.IsFailure)
+        {
+            return Result.Failure(document.Error);
+        }
+
+        if (document.Value.Contains(name))
+        {
+            return Result.Failure(ConfigurationErrors.WorkspaceAlreadyExists(Location, name));
+        }
+
+        document.Value.GetOrAdd(name);
+        document.Value.SetActive(name);
+
+        return await WriteAsync(document.Value, cancellationToken);
+    }
+
+    public async Task<Result> ActivateWorkspaceAsync(
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        Result<WorkspaceDocument> document = await LoadAsync(cancellationToken);
+
+        if (document.IsFailure)
+        {
+            return Result.Failure(document.Error);
+        }
+
+        if (!document.Value.Contains(name))
+        {
+            return Result.Failure(ConfigurationErrors.WorkspaceNotFound(Location, name));
+        }
+
+        document.Value.SetActive(name);
+
+        return await WriteAsync(document.Value, cancellationToken);
+    }
+
+    private Result<ShareApiSettings> BuildSettings(
+        string workspace,
+        IDictionary<string, string?> values)
     {
         Uri? baseUrl = null;
 
@@ -110,7 +164,7 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
         {
             return Result.Failure<ShareApiSettings>(ConfigurationErrors.InvalidValue(
                 Location,
-                $"{SectionName}.{BaseUrlKey}",
+                $"{workspace}.{BaseUrlKey}",
                 $"'{rawBaseUrl}' is not an absolute URL"));
         }
 
@@ -122,7 +176,7 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
             {
                 return Result.Failure<ShareApiSettings>(ConfigurationErrors.InvalidValue(
                     Location,
-                    $"{SectionName}.{TimeoutSecondsKey}",
+                    $"{workspace}.{TimeoutSecondsKey}",
                     $"'{rawTimeout}' is not a whole number"));
             }
 
@@ -141,7 +195,7 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
             {
                 return Result.Failure<ShareApiSettings>(ConfigurationErrors.InvalidValue(
                     Location,
-                    $"{SectionName}.{UserIdKey}",
+                    $"{workspace}.{UserIdKey}",
                     $"'{rawUserId}' is not a valid id"));
             }
 
@@ -155,44 +209,40 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
         IDictionary<string, string?> values,
         string key,
         out string? value) =>
-        values.TryGetValue($"{SectionName}:{key}", out value) &&
-        !string.IsNullOrWhiteSpace(value);
+        values.TryGetValue(key, out value) && !string.IsNullOrWhiteSpace(value);
 
-    private async Task<Result<YamlMappingNode>> LoadRootAsync(CancellationToken cancellationToken)
+    private async Task<Result<WorkspaceDocument>> LoadAsync(CancellationToken cancellationToken)
     {
         if (!Exists)
         {
-            return Result.Success(new YamlMappingNode());
+            return Result.Success(WorkspaceDocument.Empty());
         }
 
         try
         {
             string content = await File.ReadAllTextAsync(Location, cancellationToken);
 
-            var yaml = new YamlStream();
             using var reader = new StringReader(content);
-            yaml.Load(reader);
 
-            return Result.Success(
-                yaml.Documents.Count > 0 && yaml.Documents[0].RootNode is YamlMappingNode mapping
-                    ? mapping
-                    : new YamlMappingNode());
+            return Result.Success(WorkspaceDocument.Load(reader));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return Result.Failure<YamlMappingNode>(
+            return Result.Failure<WorkspaceDocument>(
                 ConfigurationErrors.Unreadable(Location, exception.Message));
         }
         catch (YamlException exception)
         {
             // Refuse to overwrite a file we could not understand — it may be hand-edited
             // and contain more than we know about.
-            return Result.Failure<YamlMappingNode>(
+            return Result.Failure<WorkspaceDocument>(
                 ConfigurationErrors.Unparseable(Location, exception.Message));
         }
     }
 
-    private async Task<Result> WriteAsync(YamlMappingNode root, CancellationToken cancellationToken)
+    private async Task<Result> WriteAsync(
+        WorkspaceDocument document,
+        CancellationToken cancellationToken)
     {
         string temporaryPath = Location + ".tmp";
 
@@ -205,7 +255,7 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
                 CreateDirectory(directory);
             }
 
-            await File.WriteAllTextAsync(temporaryPath, Serialize(root), cancellationToken);
+            await File.WriteAllTextAsync(temporaryPath, Serialize(document), cancellationToken);
             RestrictToOwner(temporaryPath);
 
             File.Move(temporaryPath, Location, overwrite: true);
@@ -220,9 +270,9 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
         }
     }
 
-    private static string Serialize(YamlMappingNode root)
+    private static string Serialize(WorkspaceDocument document)
     {
-        var stream = new YamlStream(new YamlDocument(root));
+        var stream = new YamlStream(new YamlDocument(document.ToYaml()));
 
         using var writer = new StringWriter();
         stream.Save(writer, assignAnchors: false);
@@ -285,23 +335,6 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
         {
             // Best effort only — the save has already failed and is being reported.
         }
-    }
-
-    private static YamlMappingNode GetOrAddMapping(YamlMappingNode parent, string key)
-    {
-        var scalarKey = new YamlScalarNode(key);
-
-        if (parent.Children.TryGetValue(scalarKey, out YamlNode? existing) &&
-            existing is YamlMappingNode mapping)
-        {
-            return mapping;
-        }
-
-        var created = new YamlMappingNode();
-        parent.Children.Remove(scalarKey);
-        parent.Children.Add(scalarKey, created);
-
-        return created;
     }
 
     private static void SetScalar(YamlMappingNode parent, string key, string? value)

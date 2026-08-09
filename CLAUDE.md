@@ -71,7 +71,7 @@ Each project is an **Nx project** defined by its `project.json`. Nx targets (`se
 | ----------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | API behavior, endpoints, domain logic, persistence    | `apps/api` + `libs/api/*`                                  | Follow the Clean Architecture rules below.                                               |
 | Customer-facing CLI behavior or its business logic    | `apps/share-cli` + `libs/share-cli/*`                            | Never reach into `libs/api/application`, `libs/api/domain` or `libs/api/infrastructure`. |
-| What the customer-facing CLI is configured with       | `~/.share/config.yaml` via `share config set`              | The YAML file is the source of truth, not `appsettings.json`.                            |
+| What the customer-facing CLI is configured with       | `~/.shareit/config.yaml` via `share config set`            | The YAML file is the source of truth, not `appsettings.json`. Writes land in the active workspace. |
 | The shape of a request/response the frontend consumes | `apps/api` **first**, then regenerate `libs/api/api-types` | The contract is owned by the backend; types are generated, never hand-edited.            |
 | The API client the customer-facing CLI calls          | `apps/api` **first**, then regenerate `libs/share-cli/api-types` | Refitter-generated Refit client; never hand-edit `Generated.cs`.                         |
 | UI, pages, components, client-side state, fetching    | `apps/web`                                                 | Self-contained; consumes `@share/api-types`.                                             |
@@ -226,7 +226,7 @@ The seam between the CLI's use cases and HTTP:
 - **Upload targets are matched to local files by relative path, never by position** — the API makes no promise about ordering. A file with no matching target fails with `Share.MissingUploadUrl`.
 - **Uploads run one at a time and stop at the first failure**, and nothing is rolled back: a share that is created but never finalized stays `pending` and expires on its own. Do not add server-side cleanup the CLI does not own.
 - **`PresignedFileUploader` gets its own `HttpClient`**, registered in `Infrastructure/DependencyInjection.cs` _without_ `ApiKeyHeaderHandler` and with no timeout — presigned URLs point at object storage, the API key must not travel there, and an upload takes as long as the file is (cancellation stops it). Keep both properties if you touch that registration.
-- **The owner comes from `--user-id`, falling back to `shareApi.userId` in the configuration file.** Unlike the other settings this one is read through `IConfigurationStore` rather than `IOptions`, so it is file-only — no `ShareApi__UserId` environment variable. The API takes `OwnerUserId` explicitly today; if it ever derives the owner from the API key, this fallback is the thing to delete.
+- **The owner comes from `--user-id`, falling back to `userId` in the active workspace of the configuration file.** Unlike the other settings this one is read through `IConfigurationStore` rather than `IOptions`, so it is file-only — no `ShareApi__UserId` environment variable. The API takes `OwnerUserId` explicitly today; if it ever derives the owner from the API key, this fallback is the thing to delete.
 - The API's manifest carries sizes as a 32-bit value, so a single file over `int.MaxValue` bytes fails with `Share.FileTooLarge` before anything is sent.
 
 ### `share update` — the self-update use case
@@ -250,7 +250,7 @@ The seam between the CLI's use cases and HTTP:
 - **`GitHubReleaseCatalog` lists releases and filters them**, rather than using `/releases/latest`: that endpoint answers for the repository, not for the `sharecli-` tag prefix. `GetLatestAsync` returns stable releases only; a prerelease is reachable only by naming it with `--version`. Matching is on the parsed version, so `sharecli-1.3.2` and `sharecli-v1.3.2` are both found by asking for `1.3.2`.
 - **Both HTTP clients are registered without `ApiKeyHeaderHandler`** — they talk to GitHub, and the Share API key must not travel there. The archive client has no timeout, for the same reason `PresignedFileUploader` has none.
 - **Confirmation lives in `UpdateCommands`, not in a handler.** `--yes` never reaches the Application layer; a non-terminal stdin without `--yes` fails rather than assuming consent.
-- Repository coordinates are `UpdateDefaults` in the domain, bindable through the `Update` options section for a fork or a test environment. Nothing has to be configured to use it, and it is deliberately not part of `~/.share/config.yaml`.
+- Repository coordinates are `UpdateDefaults` in the domain, bindable through the `Update` options section for a fork or a test environment. Nothing has to be configured to use it, and it is deliberately not part of `~/.shareit/config.yaml`.
 - The updater's clone cannot delete the file it is executing, so it is left in `<temp>/share-cli-update/` and swept by the next run. That is what `UpdateWorkspace.Sweep()` is for.
 
 ### `tests/share-cli` — testing the CLI stack
@@ -260,7 +260,7 @@ Two unit-test projects, mirroring `tests/api`. Both are xUnit v3 on the Microsof
 | Project (path)                                                            | Tests                                   | Fakes the API with                 |
 | ------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------- |
 | `Share.Application.UnitTests` (`tests/share-cli/application-unit-tests/`)       | Use-case handlers and validators        | NSubstitute over `IShareApiClient` |
-| `Share.Infrastructure.UnitTests` (`tests/share-cli/infrastructure-unit-tests/`) | `ShareApiClient`, `ApiKeyHeaderHandler`, the update infrastructure | `Refit.Testing`'s `StubHttp`, `StubRoutedHandler` |
+| `Share.Infrastructure.UnitTests` (`tests/share-cli/infrastructure-unit-tests/`) | `ShareApiClient`, `ApiKeyHeaderHandler`, the update infrastructure, the configuration file and its workspaces | `Refit.Testing`'s `StubHttp`, `StubRoutedHandler`, a real file under `SHARE_CLI_CONFIG` |
 
 - **Handler tests never touch HTTP.** Take an `IShareApiClient` from `ShareApiClientSubstitute.Create()` (every operation succeeds with `ShareApiData`), then re-arrange the one call the test is about with `FailsGetUser`/`FailsCreateShare`/`FailsFinalizeShare`/`FailsGetShare`. The update handlers follow the same convention through `UpdateSubstitutes`/`UpdateData` (`FailsGetLatest`, `FailsStage`, `FailsReplace`, `FailsStart`, `FailsWait`).
 - **Adapter tests stub the socket, not the client.** `StubHttp` is a route table (`Route.Get("/shares/{shareId}")` → `Reply.With(...)`/`Reply.Json(...)`/`Reply.Status(...)`) handed to `http.CreateGeneratedClient<IApiv1>(baseUrl)`, so the real generated Refit client, its serializer and Refit's exception behaviour are all exercised. That is where each `Error` mapping (404, 409, 400 + `errors`, 401/403, unreachable, failed envelope) is pinned.
@@ -274,35 +274,52 @@ nx test Share.Infrastructure.UnitTests
 dotnet test --project tests/share-cli/application-unit-tests/Share.Application.UnitTests.csproj
 ```
 
-### Configuration — `~/.share/config.yaml` is the source of truth
+### Configuration — `~/.shareit/config.yaml` is the source of truth
 
-The CLI reads its settings from a YAML file in the user's home directory:
+The CLI reads its settings from a YAML file in the user's home directory. Each root-level
+section is a **workspace** — one complete set of settings for one server — and
+`active_workspace` picks the one in force:
 
 ```yaml
-# <user home>/.share/config.yaml
-shareApi:
+# <user home>/.shareit/config.yaml
+active_workspace: development
+
+shareApi: # the default workspace; the section the file has always had
   baseUrl: https://api.example.com
   apiKey: sk_live_...
   userId: 11111111-1111-1111-1111-111111111111
   timeoutSeconds: 45
+
+development:
+  baseUrl: https://dev.example.com
+  apiKey: sk_test_...
 ```
 
 ```bash
-share config show                              # effective values + which are defaulted
+share config show                              # effective values of the active workspace
+share config list                              # every workspace, `*` marks the active one
+share config create development                # add a workspace and make it active
+share config activate shareApi                 # point the CLI at another workspace
 share config set --base-url https://api.example.com --timeout-seconds 45
 share config set --api-key sk_live_...         # or -k
 share config set --user-id <id>                # or -i; the owner `share create` uses
 share config path                              # where the file is
 ```
 
-- **Path resolution** is `libs/share-cli/infrastructure/Configuration/CliConfigurationPath.cs`: `Environment.SpecialFolder.UserProfile` + `Path.Combine`, so it lands on `C:\Users\<name>\.share\config.yaml`, `/Users/<name>/.share/config.yaml` and `/home/<name>/.share/config.yaml` with no OS-specific code. `SHARE_CLI_CONFIG` overrides the whole path — **use it in tests** so they never touch the developer's real file.
+- **Every read and write acts on the active workspace, and only `activate` changes which that is.** `show`, `set` and `share create` never name a workspace, so switching servers is one command and nothing else has to know workspaces exist.
+- **The default workspace is `shareApi`** (`ConfigurationWorkspaces.DefaultName`) and always exists, whether or not the file has a section for it. A file written before workspaces landed is therefore already a valid one-workspace file — there is no migration.
+- **A file naming an `active_workspace` it does not define is a read failure** (`Configuration.WorkspaceNotFound`), not a fall back to defaults: defaulting would quietly aim the next command at localhost with no key. `config list` is the exception and still succeeds, because it is how the user diagnoses that file.
+- **`create` refuses to overwrite an existing workspace and `activate` refuses to invent one.** Creating implicitly on `activate` would hide a typo behind a set of silently defaulted settings.
+- **Path resolution** is `libs/share-cli/infrastructure/Configuration/CliConfigurationPath.cs`: `Environment.SpecialFolder.UserProfile` + `Path.Combine`, so it lands on `C:\Users\<name>\.shareit\config.yaml`, `/Users/<name>/.shareit/config.yaml` and `/home/<name>/.shareit/config.yaml` with no OS-specific code. `SHARE_CLI_CONFIG` overrides the whole path — **use it in tests** so they never touch the developer's real file.
 - **Precedence:** `AddShareCliConfigurationFile()` is registered **last** in `Program.cs`, so the YAML file beats `appsettings.json`, user secrets and environment variables. That is what "source of truth" means here — do not reorder it.
 - **Defaults live in one place**, `Share.Domain.Configuration.ShareApiDefaults`. Both `ShareApiOptions` and `config show` read from it, so there is no second copy to drift.
 - **The file is optional and never fatal.** A missing file means everything defaults. A malformed file is reported on stderr and _ignored_ rather than crashing startup — otherwise no command, not even `config path`, could run to fix it. `config show` then reports the precise parse error.
-- **`config set` merges**: it rewrites only the keys you pass, preserves unrelated keys in the file, writes via a temp file + move, and chmods `700`/`600` on Unix. It refuses to overwrite a file it cannot parse (`Configuration.Unparseable`) rather than discarding hand-written content. Comments are not preserved.
+- **`config set` merges**: it rewrites only the keys you pass in the active workspace, preserves every other workspace and any unrelated keys, writes via a temp file + move, and chmods `700`/`600` on Unix. It refuses to overwrite a file it cannot parse (`Configuration.Unparseable`) rather than discarding hand-written content. Comments are not preserved.
 - **The API key is write-only.** `share config set --api-key` is the way to store it; nothing ever reads it back out to the user. `ShareApiSettings.ApiKey` leaves the store only to be written straight back to the file — `ConfigurationResponse` carries `ApiKeyIsSet` (a bool), `config show` prints `set`/`not set`, and no validator or `ConfigurationErrors` message interpolates the value. Keep it that way when adding settings that are secrets. There is no way to _clear_ the key from the CLI; delete the line from the file. A blank key is rejected rather than written.
-- **Reading and writing** go through `IConfigurationStore` (`libs/share-cli/application/Abstractions/Configuration/`), implemented by `YamlConfigurationStore`. The `Get`/`Set` use cases are ordinary CQRS slices under `libs/share-cli/application/Configuration/`. `config path` is the one command that bypasses a handler — it must keep working when the file is unreadable.
-- The YAML → `Section:Key` flattening lives in `YamlConfigurationParser` and is shared by the configuration provider and the store, so both read the file identically.
+- **Reading and writing** go through `IConfigurationStore` (`libs/share-cli/application/Abstractions/Configuration/`), implemented by `YamlConfigurationStore`. The `Get`/`Set`/`List`/`Create`/`Activate` use cases are ordinary CQRS slices under `libs/share-cli/application/Configuration/`. `config path` is the one command that bypasses a handler — it must keep working when the file is unreadable.
+- **The file's shape is known in exactly one place**, `WorkspaceDocument` — the store writes through it and the configuration provider reads through it, so the two can never disagree about which section is in force. The `Section:Key` flattening `IConfiguration` needs is `YamlConfigurationParser`, applied to the node `WorkspaceDocument` hands back.
+- **The provider surfaces the active workspace only**, remapped onto the `ShareApi` section that `ShareApiOptions` binds. The inactive workspaces are deliberately absent from `IConfiguration`: nothing binds them, and keeping them out means their API keys never reach it.
+- **Workspace names must be usable as both a YAML key and an `IConfiguration` section**: start with a letter, then letters, digits, `-` or `_`. They are matched case-insensitively, the way `IConfiguration` matches sections, so `Development` and `development` are one workspace rather than two that shadow each other.
 
 ### Golden rules
 

@@ -26,11 +26,16 @@ public class GetConfigurationQueryHandlerTests
     private Task<Result<ConfigurationResponse>> Handle() =>
         _handler.Handle(new GetConfigurationQuery(), TestContext.Current.CancellationToken);
 
+    private static Result<ActiveWorkspace> Active(
+        ShareApiSettings settings,
+        string name = ConfigurationWorkspaces.DefaultName) =>
+        Result.Success(new ActiveWorkspace(name, settings));
+
     [Fact]
     public async Task Handle_Should_ReportDefaults_WhenTheFileSetsNothing()
     {
         _store.Exists.Returns(false);
-        _store.ReadAsync(Arg.Any<CancellationToken>()).Returns(Result.Success(ShareApiSettings.Empty));
+        _store.ReadAsync(Arg.Any<CancellationToken>()).Returns(Active(ShareApiSettings.Empty));
 
         Result<ConfigurationResponse> result = await Handle();
 
@@ -51,7 +56,7 @@ public class GetConfigurationQueryHandlerTests
         _store.Exists.Returns(true);
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new ShareApiSettings(baseUrl, null, null, null)));
+            .Returns(Active(new ShareApiSettings(baseUrl, null, null, null)));
 
         Result<ConfigurationResponse> result = await Handle();
 
@@ -69,7 +74,7 @@ public class GetConfigurationQueryHandlerTests
         _store.Exists.Returns(true);
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new ShareApiSettings(null, null, "super-secret", null)));
+            .Returns(Active(new ShareApiSettings(null, null, "super-secret", null)));
 
         Result<ConfigurationResponse> result = await Handle();
 
@@ -84,7 +89,7 @@ public class GetConfigurationQueryHandlerTests
         Error error = ConfigurationErrors.Unparseable(Location, "mapping values are not allowed");
         _store
             .ReadAsync(Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<ShareApiSettings>(error));
+            .Returns(Result.Failure<ActiveWorkspace>(error));
 
         Result<ConfigurationResponse> result = await Handle();
 
