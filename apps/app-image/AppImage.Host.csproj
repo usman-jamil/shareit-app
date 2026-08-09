@@ -11,7 +11,7 @@
     <!-- No culture-sensitive formatting anywhere in this host; drops the libicu dependency. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
   </PropertyGroup>
 
   <ItemGroup>
