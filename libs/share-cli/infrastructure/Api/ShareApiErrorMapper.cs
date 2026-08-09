@@ -3,7 +3,6 @@ using System.Text.Json;
 using Refit;
 using Share.Domain.Api;
 using SharedKernel;
-using ApiError = Share.Api.Types.Error;
 
 namespace Share.Infrastructure.Api;
 
@@ -18,22 +17,6 @@ internal static class ShareApiErrorMapper
     {
         PropertyNameCaseInsensitive = true
     };
-
-    /// <summary>
-    /// Maps a failure reported inside a successful (2xx) response envelope. The API only
-    /// does this if it returns <c>Result.Failure</c> with an OK status, which it currently
-    /// never does — handled so a future contract change degrades into a failure result
-    /// rather than a wrong success.
-    /// </summary>
-    public static Error FromEnvelope(ApiError? error)
-    {
-        if (error is null || string.IsNullOrWhiteSpace(error.Code))
-        {
-            return ShareApiErrors.InvalidResponse();
-        }
-
-        return new Error(error.Code, error.Description ?? string.Empty, ToErrorType(error.Type));
-    }
 
     /// <summary>
     /// Maps a thrown transport exception. Refit splits these in two: <see cref="ApiException"/>

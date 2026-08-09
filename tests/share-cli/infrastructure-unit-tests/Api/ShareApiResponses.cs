@@ -1,7 +1,6 @@
 using System.Globalization;
 using Share.Api.Types;
 using Share.Domain.Shares;
-using ApiError = Share.Api.Types.Error;
 
 namespace Share.Infrastructure.UnitTests.Api;
 
@@ -29,78 +28,46 @@ internal static class ShareApiResponses
     public const int FileSize = 1024;
     public const int TtlMinutes = 60;
 
-    private static ApiError NoError => new() { Code = string.Empty, Description = string.Empty };
-
-    public static ResultOfUserResponse User() => new()
+    public static UserResponse User() => new()
     {
-        IsSuccess = true,
-        Error = NoError,
-        Value = new UserResponse
-        {
-            Id = UserId,
-            Name = "Usman",
-            Email = "test@test.com",
-            CreatedAt = CreatedAt
-        }
+        Id = UserId,
+        Name = "Usman",
+        Email = "test@test.com",
+        CreatedAt = CreatedAt
     };
 
-    public static ResultOfCreateShareResponse CreatedShare() => new()
+    // Unlike the others, this endpoint returns its payload bare rather than in a Result envelope.
+    public static CreateShareResponse CreatedShare() => new()
     {
-        IsSuccess = true,
-        Error = NoError,
-        Value = new CreateShareResponse
-        {
-            ShareId = ShareId,
-            Files = [new FileUploadUrl { RelativePath = RelativePath, UploadUrl = UploadUrl }]
-        }
+        ShareId = ShareId,
+        Files = [new FileUploadUrl { RelativePath = RelativePath, UploadUrl = UploadUrl }]
     };
 
-    public static ResultOfShareResponse Share(string status = ShareStatus.Pending) => new()
+    public static ShareResponse Share(string status = ShareStatus.Pending) => new()
     {
-        IsSuccess = true,
-        Error = NoError,
-        Value = new ShareResponse
-        {
-            Id = ShareId,
-            OwnerUserId = UserId,
-            Status = status,
-            CreatedAt = CreatedAt,
-            UpdatedAt = CreatedAt,
-            ExpiresAt = CreatedAt.AddMinutes(TtlMinutes),
-            ConfiguredTtlMinutes = TtlMinutes,
-            TotalBytes = FileSize,
-            FileCount = 1,
-            Files =
-            [
-                new FileResponse
-                {
-                    Id = FileId,
-                    ShareId = ShareId,
-                    RelativePath = RelativePath,
-                    Sha256 = new string('0', 64),
-                    ContentType = ContentType,
-                    CreatedAt = CreatedAt,
-                    UpdatedAt = CreatedAt,
-                    Size = FileSize
-                }
-            ]
-        }
-    };
-
-    /// <summary>
-    /// A 2xx response whose envelope reports failure — the shape the CLI must degrade into
-    /// a failure result rather than a wrong success.
-    /// </summary>
-    public static ResultOfShareResponse FailedShareEnvelope(string code, string description) => new()
-    {
-        IsSuccess = false,
-        IsFailure = true,
-        Error = new ApiError
-        {
-            Code = code,
-            Description = description,
-            Type = (int)SharedKernel.ErrorType.NotFound
-        }
+        Id = ShareId,
+        OwnerUserId = UserId,
+        Status = status,
+        CreatedAt = CreatedAt,
+        UpdatedAt = CreatedAt,
+        ExpiresAt = CreatedAt.AddMinutes(TtlMinutes),
+        ConfiguredTtlMinutes = TtlMinutes,
+        TotalBytes = FileSize,
+        FileCount = 1,
+        Files =
+        [
+            new FileResponse
+            {
+                Id = FileId,
+                ShareId = ShareId,
+                RelativePath = RelativePath,
+                Sha256 = new string('0', 64),
+                ContentType = ContentType,
+                CreatedAt = CreatedAt,
+                UpdatedAt = CreatedAt,
+                Size = FileSize
+            }
+        ]
     };
 
     /// <summary>

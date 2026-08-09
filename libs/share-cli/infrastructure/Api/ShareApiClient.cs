@@ -3,7 +3,6 @@ using Share.Api.Types;
 using Share.Application.Abstractions.Api;
 using Share.Domain.Api;
 using SharedKernel;
-using ApiError = Share.Api.Types.Error;
 
 namespace Share.Infrastructure.Api;
 
@@ -27,11 +26,7 @@ internal sealed class ShareApiClient(IApiv1 api) : IShareApiClient
         CancellationToken cancellationToken = default) =>
         SendAsync(
             () => api.Users(userId),
-            response => Unwrap(
-                response.IsSuccess,
-                response.Error,
-                response.Value,
-                ShareApiMappings.ToUserDetails),
+            ShareApiMappings.ToUserDetails,
             cancellationToken);
 
     public Task<Result<CreatedShare>> CreateShareAsync(
@@ -42,11 +37,7 @@ internal sealed class ShareApiClient(IApiv1 api) : IShareApiClient
 
         return SendAsync(
             () => api.SharesPost(request.ToBody()),
-            response => Unwrap(
-                response.IsSuccess,
-                response.Error,
-                response.Value,
-                ShareApiMappings.ToCreatedShare),
+            ShareApiMappings.ToCreatedShare,
             cancellationToken);
     }
 
@@ -60,11 +51,7 @@ internal sealed class ShareApiClient(IApiv1 api) : IShareApiClient
         CancellationToken cancellationToken = default) =>
         SendAsync(
             () => api.SharesGet(shareId),
-            response => Unwrap(
-                response.IsSuccess,
-                response.Error,
-                response.Value,
-                ShareApiMappings.ToShareDetails),
+            ShareApiMappings.ToShareDetails,
             cancellationToken);
 
     private static async Task<Result<TValue>> SendAsync<TResponse, TValue>(
@@ -90,6 +77,26 @@ internal sealed class ShareApiClient(IApiv1 api) : IShareApiClient
         }
     }
 
+    /// <summary>
+    /// The same conversation for an endpoint that returns its payload bare rather than wrapped
+    /// in the API's <c>Result</c> envelope: there is nothing to unwrap, so reaching the response
+    /// at all is the success case and <paramref name="map"/> only translates it.
+    /// </summary>
+    /// <remarks>
+    /// Overload resolution picks this over the envelope overload only when
+    /// <paramref name="map"/> returns something other than a <see cref="Result{TValue}"/>;
+    /// a mapper that already returns one binds to the envelope overload, which has the more
+    /// specific parameter type.
+    /// </remarks>
+    private static Task<Result<TValue>> SendAsync<TResponse, TValue>(
+        Func<Task<TResponse>> send,
+        Func<TResponse, TValue> map,
+        CancellationToken cancellationToken) =>
+        SendAsync(
+            send,
+            response => Result.Success(map(response)),
+            cancellationToken);
+
     private static async Task<Result> SendAsync(Func<Task> send, CancellationToken cancellationToken)
     {
         try
@@ -107,14 +114,4 @@ internal sealed class ShareApiClient(IApiv1 api) : IShareApiClient
             return Result.Failure(ShareApiErrorMapper.FromException(exception));
         }
     }
-
-    private static Result<TValue> Unwrap<TResponse, TValue>(
-        bool isSuccess,
-        ApiError? error,
-        TResponse? value,
-        Func<TResponse, TValue> map)
-        where TResponse : class =>
-        isSuccess && value is not null
-            ? Result.Success(map(value))
-            : Result.Failure<TValue>(ShareApiErrorMapper.FromEnvelope(error));
 }

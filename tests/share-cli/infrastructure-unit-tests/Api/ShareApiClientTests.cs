@@ -248,24 +248,6 @@ public class ShareApiClientTests
     }
 
     [Fact]
-    public async Task GetShareAsync_Should_Fail_WhenAnOkResponseCarriesAFailedEnvelope()
-    {
-        using var http = new StubHttp
-        {
-            {
-                Route.Get("/shares/{shareId}"),
-                Reply.With(ShareApiResponses.FailedShareEnvelope("Shares.NotFound", "Gone"))
-            }
-        };
-
-        Result<ShareDetails> result = await ClientFor(http).GetShareAsync(ShareApiResponses.ShareId, Token);
-
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Code.ShouldBe("Shares.NotFound");
-        result.Error.Type.ShouldBe(ErrorType.NotFound);
-    }
-
-    [Fact]
     public async Task GetShareAsync_Should_Propagate_WhenTheCallerCancelsAnInFlightRequest()
     {
         // The API never answers, so the call is still in flight when the caller cancels.

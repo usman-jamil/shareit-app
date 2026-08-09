@@ -28,7 +28,7 @@ internal sealed class Create : IEndpoint
 
                 return result.Match(Results.Ok, CustomResults.Problem);
             })
-            .Produces<Result<CreateShareResponse>>()
+            .Produces<CreateShareResponse>()
             .RequireApiKey()
             .WithTags(Tags.Shares);
     }

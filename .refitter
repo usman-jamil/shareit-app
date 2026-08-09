@@ -1,6 +1,7 @@
 {
-  "openApiPath": "http://localhost:5080/openapi/v1.json",
+  "openApiPath": "http://localhost:5000/openapi/v1.json",
   "namespace": "Share.Api.Types",
   "outputFolder": "./libs/share-cli/api-types",
+  "outputFilename": "Generated.cs",
   "useCancellationTokens": true
 }
