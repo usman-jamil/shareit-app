@@ -1,4 +1,19 @@
-# Share
+<div align="center">
+
+<pre>
+███████╗██╗  ██╗ █████╗ ██████╗ ███████╗
+██╔════╝██║  ██║██╔══██╗██╔══██╗██╔════╝
+███████╗███████║███████║██████╔╝█████╗  
+╚════██║██╔══██║██╔══██║██╔══██╗██╔══╝  
+███████║██║  ██║██║  ██║██║  ██║███████╗
+╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+</pre>
+
+**Share a folder. Get a link. It expires.**
+
+[![Share CLI release](https://img.shields.io/github/v/release/usman-jamil/shareit-app?filter=sharecli-*&label=share%20cli&color=00B4AB)](https://github.com/usman-jamil/shareit-app/releases?q=sharecli) [![API release](https://img.shields.io/docker/v/musmanbhatti/shareit-app?sort=semver&label=api&color=2496ED&logo=docker&logoColor=white)](https://hub.docker.com/r/musmanbhatti/shareit-app/tags) [![Build](https://img.shields.io/github/actions/workflow/status/usman-jamil/shareit-app/build.yml?branch=main&label=build)](https://github.com/usman-jamil/shareit-app/actions/workflows/build.yml) [![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
+
+</div>
 
 Share makes it easy for developers to hand a folder to someone else. Run one command inside a
 folder, get back a URL with a time-to-live; the recipient opens it in a browser and browses or
@@ -181,6 +196,21 @@ environment variables. `SHARE_CLI_CONFIG` overrides the path.
 Both artifacts release by pushing a tag. The tag **is** the version: the prefix and an optional `v`
 are stripped, and what remains must be `MAJOR.MINOR.PATCH` with an optional `-suffix`. A suffix
 marks the release as a prerelease, which is published but does not become the default.
+
+The two version badges below read the published artifacts directly, so they are current without
+anyone editing this file:
+
+| Component | Latest release | Tag | Published to |
+| --------- | -------------- | --- | ------------ |
+| API + web app | [![API release](https://img.shields.io/docker/v/musmanbhatti/shareit-app?sort=semver&label=%20&color=2496ED)](https://hub.docker.com/r/musmanbhatti/shareit-app/tags) | `shareapi-1.2.3` | [Docker Hub](https://hub.docker.com/r/musmanbhatti/shareit-app/tags) |
+| Customer CLI | [![Share CLI release](https://img.shields.io/github/v/release/usman-jamil/shareit-app?filter=sharecli-*&label=%20&color=00B4AB)](https://github.com/usman-jamil/shareit-app/releases?q=sharecli) | `sharecli-1.2.3` | [GitHub releases](https://github.com/usman-jamil/shareit-app/releases?q=sharecli) |
+
+The two versions move independently, and they are read from different places for a reason. The CLI's
+tag becomes its assembly version — the workflow passes it to `dotnet publish`, so `share --version`
+matches the tag, and `<Version>` in `apps/share-cli/Share.Cli.csproj` is only what a local build
+reports. The API's assembly version stays pinned in `apps/api/Api.csproj` and does **not** follow the
+tag; a release is identified by its image tag and OCI labels, which is why the badge tracks Docker
+Hub rather than a GitHub release.
 
 ### The API and web app — one Docker image
 
