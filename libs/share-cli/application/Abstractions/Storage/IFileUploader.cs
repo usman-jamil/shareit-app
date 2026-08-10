@@ -19,8 +19,23 @@ public interface IFileUploader
     /// rather than throwing for anything the user can act on: an unreadable file, a
     /// rejected or expired URL, a dead connection, a timeout.
     /// </summary>
+    /// <param name="uploadUrl">The presigned URL the API issued for this file.</param>
+    /// <param name="file">The local file to send.</param>
+    /// <param name="bytesUploaded">
+    /// Told the running total of bytes handed to the transport for this file as it goes, or
+    /// <see langword="null"/> when nothing is watching. It is a total and not an increment,
+    /// so a body that has to be rewound can restate where it now is.
+    /// <para>
+    /// "Handed to the transport", not "acknowledged by storage": a file small enough to fit
+    /// the socket's send buffer is counted before it has left the machine. Good enough to
+    /// drive a progress bar, not evidence that anything arrived — only the returned
+    /// <c>Result</c> is that.
+    /// </para>
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     Task<Result> UploadAsync(
         Uri uploadUrl,
         LocalFile file,
+        IProgress<long>? bytesUploaded = null,
         CancellationToken cancellationToken = default);
 }

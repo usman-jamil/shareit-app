@@ -44,4 +44,23 @@ public static class ConfigurationErrors
       "Configuration.WorkspaceAlreadyExists",
       $"A workspace named '{name}' already exists in the configuration file at '{path}'. " +
       $"Run `share config activate {name}` to switch to it.");
+
+    /// <summary>
+    /// A command that would normally ask which workspace to use was run somewhere it cannot
+    /// ask — a pipe, a script, CI, a terminal that cannot be drawn on. Naming one is the way
+    /// out, so the message says which command to name it on.
+    /// </summary>
+    public static Error WorkspaceNameRequired(string command) => Error.Failure(
+      "Configuration.WorkspaceNameRequired",
+      $"Name the workspace, e.g. `share config {command} development`. " +
+      "There is no interactive terminal here to ask on.");
+
+    public static Error NoWorkspaces(string path) => Error.NotFound(
+      "Configuration.NoWorkspaces",
+      $"The configuration file at '{path}' defines no workspaces. " +
+      "Run `share config create` to add one.");
+
+    public static Error InvalidBaseUrl(string value) => Error.Failure(
+      "Configuration.InvalidBaseUrl",
+      $"'{value}' is not an absolute URL, e.g. https://api.example.com");
 }

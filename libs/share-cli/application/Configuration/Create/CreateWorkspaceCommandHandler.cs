@@ -18,8 +18,22 @@ internal sealed class CreateWorkspaceCommandHandler(IConfigurationStore store)
             return Result.Failure<ConfigurationResponse>(created.Error);
         }
 
-        // Read back rather than assume: the new workspace sets nothing, so this reports the
-        // defaults the user now has to fill in.
+        if (command.Settings is { } settings)
+        {
+            // The new workspace is already the active one, so this lands in it. If the second
+            // write fails the workspace stays behind, empty: it is named and selected, and
+            // `config set` finishes the job — which is better than removing a workspace the
+            // user has just been told about.
+            Result saved = await store.SaveAsync(settings, cancellationToken);
+
+            if (saved.IsFailure)
+            {
+                return Result.Failure<ConfigurationResponse>(saved.Error);
+            }
+        }
+
+        // Read back rather than assume: this reports what the workspace now holds, including
+        // the defaults the user still has to fill in.
         Result<ActiveWorkspace> workspace = await store.ReadAsync(cancellationToken);
 
         return workspace.IsFailure

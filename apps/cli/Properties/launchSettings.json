@@ -20,8 +20,8 @@
       "commandLineArgs": "create-api-key --user-id 4595eb32-3fe9-4182-8de6-bd57f8d56a7e",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Production",
-        "ConnectionStrings__Database": "Host=#;Port=5432;Database=share;Username=postgres;Password=postgres",
-        "ApiKey__Pepper": "temp",
+        "ConnectionStrings__Database": "Host=212.90.121.245;Port=5434;Database=share;Username=postgres;Password=Cn9r8Bj&E5N8GplO",
+        "ApiKey__Pepper": "WbCjXt1EF4S2xkC92l/A9bqZ4p6lHky5C+F3ONQWcrc=",
         "Storage__AccessKeyId": "temp",
         "Storage__SecretAccessKey": "temp",
         "Storage__ServiceUrl": "temp",

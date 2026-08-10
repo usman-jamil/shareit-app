@@ -2,6 +2,7 @@ using Share.Application.Abstractions.Api;
 using Share.Application.Abstractions.Configuration;
 using Share.Application.Abstractions.FileSystem;
 using Share.Application.Abstractions.Messaging;
+using Share.Application.Abstractions.Progress;
 using Share.Application.Abstractions.Storage;
 using Share.Domain.Shares;
 using SharedKernel;
@@ -58,7 +59,15 @@ internal sealed class CreateShareCommandHandler(
             return Result.Failure<CreateShareResponse>(created.Error);
         }
 
-        Result uploaded = await UploadAllAsync(files, created.Value, cancellationToken);
+        long totalBytes = files.Sum(file => file.Size);
+
+        // Reported only once the share exists: until then there is nothing to upload, and a
+        // bar that appears before the API has agreed would have to be taken back again.
+        IUploadProgressReporter progress = command.Progress ?? NullUploadProgressReporter.Instance;
+
+        progress.Starting(files.Count, totalBytes);
+
+        Result uploaded = await UploadAllAsync(files, created.Value, progress, cancellationToken);
 
         if (uploaded.IsFailure)
         {
@@ -73,7 +82,7 @@ internal sealed class CreateShareCommandHandler(
                 created.Value.ShareId,
                 scanned.Value.Root,
                 files.Count,
-                files.Sum(file => file.Size)));
+                totalBytes));
     }
 
     /// <summary>
@@ -134,12 +143,17 @@ internal sealed class CreateShareCommandHandler(
     private async Task<Result> UploadAllAsync(
         IReadOnlyList<LocalFile> files,
         CreatedShare created,
+        IUploadProgressReporter progress,
         CancellationToken cancellationToken)
     {
         var targets = created.Files.ToDictionary(
             target => target.RelativePath,
             target => target.UploadUrl,
             StringComparer.Ordinal);
+
+        // One adapter for the whole run: it holds no state of its own, and the reporter is
+        // told which file the counts belong to by FileStarting.
+        var bytesUploaded = new FileUploadProgress(progress);
 
         foreach (LocalFile file in files)
         {
@@ -150,12 +164,17 @@ internal sealed class CreateShareCommandHandler(
                 return Result.Failure(ShareErrors.MissingUploadUrl(file.RelativePath));
             }
 
-            Result uploaded = await uploader.UploadAsync(uploadUrl, file, cancellationToken);
+            progress.FileStarting(file.RelativePath, file.Size);
+
+            Result uploaded =
+                await uploader.UploadAsync(uploadUrl, file, bytesUploaded, cancellationToken);
 
             if (uploaded.IsFailure)
             {
                 return uploaded;
             }
+
+            progress.FileCompleted(file.RelativePath);
         }
 
         return Result.Success();

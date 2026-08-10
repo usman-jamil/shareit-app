@@ -115,7 +115,9 @@ public sealed class WorkspaceConfigurationTests : IDisposable
 
         workspaces.IsSuccess.ShouldBeTrue();
         workspaces.Value.Active.ShouldBe(ConfigurationWorkspaces.DefaultName);
-        workspaces.Value.Names.ShouldBe([ConfigurationWorkspaces.DefaultName]);
+        workspaces.Value.Workspaces.Select(workspace => workspace.Name)
+            .ShouldBe([ConfigurationWorkspaces.DefaultName]);
+        workspaces.Value.Workspaces[0].BaseUrl.ShouldBeNull();
     }
 
     [Fact]
@@ -135,8 +137,42 @@ public sealed class WorkspaceConfigurationTests : IDisposable
 
         workspaces.IsSuccess.ShouldBeTrue();
         workspaces.Value.Active.ShouldBe("development");
-        workspaces.Value.Names.ShouldBe(
-            [ConfigurationWorkspaces.DefaultName, "development", "production"]);
+        workspaces.Value.Workspaces.Select(workspace => workspace.Name)
+            .ShouldBe([ConfigurationWorkspaces.DefaultName, "development", "production"]);
+    }
+
+    [Fact]
+    public async Task ListWorkspacesAsync_Should_ReportEachWorkspacesBaseUrl()
+    {
+        await WriteFileAsync(
+            """
+            active_workspace: development
+            development:
+              baseUrl: https://dev.example.com
+              apiKey: sk_test_dev
+            production:
+              baseUrl: not-a-url
+              apiKey: sk_live_prod
+            staging:
+              apiKey: sk_test_staging
+            """);
+
+        Result<WorkspaceList> workspaces =
+            await Store().ListWorkspacesAsync(TestContext.Current.CancellationToken);
+
+        workspaces.IsSuccess.ShouldBeTrue();
+
+        // Taken as written, including the one that is not a URL: a listing that failed on it
+        // would hide the very thing the user is looking for.
+        workspaces.Value.Workspaces
+            .ToDictionary(workspace => workspace.Name, workspace => workspace.BaseUrl)
+            .ShouldBe(new Dictionary<string, string?>
+            {
+                [ConfigurationWorkspaces.DefaultName] = null,
+                ["development"] = "https://dev.example.com",
+                ["production"] = "not-a-url",
+                ["staging"] = null
+            });
     }
 
     [Fact]
@@ -150,7 +186,8 @@ public sealed class WorkspaceConfigurationTests : IDisposable
 
         workspaces.IsSuccess.ShouldBeTrue();
         workspaces.Value.Active.ShouldBe("staging");
-        workspaces.Value.Names.ShouldNotContain("staging");
+        workspaces.Value.Workspaces.Select(workspace => workspace.Name)
+            .ShouldNotContain("staging");
     }
 
     [Fact]

@@ -1,4 +1,3 @@
-using System.Globalization;
 using ConsoleAppFramework;
 using Microsoft.Extensions.DependencyInjection;
 using Share.Application.Abstractions.Configuration;
@@ -9,6 +8,8 @@ using Share.Application.Configuration.Create;
 using Share.Application.Configuration.Get;
 using Share.Application.Configuration.List;
 using Share.Application.Configuration.Set;
+using Share.Cli.Rendering;
+using Share.Domain.Configuration;
 using SharedKernel;
 
 namespace Share.Cli.Commands;
@@ -21,6 +22,11 @@ namespace Share.Cli.Commands;
 /// The file holds one <b>workspace</b> per server the CLI can be pointed at, and
 /// <c>show</c> and <c>set</c> always act on the active one. Switching servers is
 /// <c>config activate</c>; nothing else takes a workspace name.
+/// <para>
+/// <c>create</c> and <c>activate</c> ask for what they were not told, but only when there is
+/// a terminal to ask: given every argument they need, both run without a word, so a script
+/// or a Dockerfile behaves exactly as it did before.
+/// </para>
 /// </remarks>
 public class ConfigCommands(IServiceProvider serviceProvider)
 {
@@ -41,10 +47,10 @@ public class ConfigCommands(IServiceProvider serviceProvider)
 
         if (result.IsFailure)
         {
-            return Fail(result.Error);
+            return ConsoleOutput.Fail(result.Error);
         }
 
-        Write(result.Value);
+        ConfigurationView.Write(result.Value);
 
         return 0;
     }
@@ -57,63 +63,95 @@ public class ConfigCommands(IServiceProvider serviceProvider)
     {
         using IServiceScope scope = serviceProvider.CreateScope();
 
-        IQueryHandler<ListWorkspacesQuery, WorkspacesResponse> handler =
-            scope.ServiceProvider
-                .GetRequiredService<IQueryHandler<ListWorkspacesQuery, WorkspacesResponse>>();
-
-        Result<WorkspacesResponse> result =
-            await handler.Handle(new ListWorkspacesQuery(), cancellationToken);
+        Result<WorkspacesResponse> result = await ListWorkspacesAsync(scope, cancellationToken);
 
         if (result.IsFailure)
         {
-            return Fail(result.Error);
+            return ConsoleOutput.Fail(result.Error);
         }
 
-        Write(result.Value);
+        ConfigurationView.Write(result.Value);
 
         return 0;
     }
 
     /// <summary>
-    /// Add a workspace and make it active. Everything `config set` writes from now on lands
-    /// in it, leaving the workspace you were on untouched.
+    /// Add a workspace and make it active. Given a name it is created empty; given none, it asks.
     /// </summary>
-    /// <param name="name">Name of the new workspace, e.g. development.</param>
+    /// <remarks>
+    /// Everything <c>config set</c> writes from now on lands in the new workspace, leaving the
+    /// one you were on untouched.
+    /// </remarks>
+    /// <param name="name">Name of the new workspace, e.g. development. Omit to be asked for it.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [Command("create")]
-    public async Task<int> Create([Argument] string name, CancellationToken cancellationToken = default)
+    public async Task<int> Create(
+        [Argument] string? name = null,
+        CancellationToken cancellationToken = default)
     {
+        CreateWorkspaceCommand command;
+
+        if (name is null)
+        {
+            if (!ConsoleOutput.IsInteractive)
+            {
+                return ConsoleOutput.Fail(ConfigurationErrors.WorkspaceNameRequired("create"));
+            }
+
+            PromptedWorkspace prompted = ConfigPrompts.NewWorkspace();
+
+            command = new CreateWorkspaceCommand(prompted.Name, prompted.Settings);
+        }
+        else
+        {
+            // Named on the command line, it stays a bare workspace with everything defaulted:
+            // that is the form scripts use, and it must not start asking questions.
+            command = new CreateWorkspaceCommand(name);
+        }
+
         using IServiceScope scope = serviceProvider.CreateScope();
 
         ICommandHandler<CreateWorkspaceCommand, ConfigurationResponse> handler =
             scope.ServiceProvider
                 .GetRequiredService<ICommandHandler<CreateWorkspaceCommand, ConfigurationResponse>>();
 
-        Result<ConfigurationResponse> result =
-            await handler.Handle(new CreateWorkspaceCommand(name), cancellationToken);
+        Result<ConfigurationResponse> result = await handler.Handle(command, cancellationToken);
 
         if (result.IsFailure)
         {
-            return Fail(result.Error);
+            return ConsoleOutput.Fail(result.Error);
         }
 
-        Console.WriteLine(
+        ConsoleOutput.Success(
             $"Created workspace '{result.Value.Workspace}' in {result.Value.Location} and made it active.");
-        Console.WriteLine();
-        Write(result.Value);
+        ConfigurationView.Write(result.Value);
 
         return 0;
     }
 
     /// <summary>
-    /// Point the CLI at an existing workspace.
+    /// Point the CLI at an existing workspace. Given no name, it offers a list to pick from.
     /// </summary>
-    /// <param name="name">Name of the workspace to switch to.</param>
+    /// <param name="name">Name of the workspace to switch to. Omit to pick from a list.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     [Command("activate")]
-    public async Task<int> Activate([Argument] string name, CancellationToken cancellationToken = default)
+    public async Task<int> Activate(
+        [Argument] string? name = null,
+        CancellationToken cancellationToken = default)
     {
         using IServiceScope scope = serviceProvider.CreateScope();
+
+        if (name is null)
+        {
+            Result<string> chosen = await ChooseWorkspaceAsync(scope, cancellationToken);
+
+            if (chosen.IsFailure)
+            {
+                return ConsoleOutput.Fail(chosen.Error);
+            }
+
+            name = chosen.Value;
+        }
 
         ICommandHandler<ActivateWorkspaceCommand, ConfigurationResponse> handler =
             scope.ServiceProvider
@@ -124,12 +162,11 @@ public class ConfigCommands(IServiceProvider serviceProvider)
 
         if (result.IsFailure)
         {
-            return Fail(result.Error);
+            return ConsoleOutput.Fail(result.Error);
         }
 
-        Console.WriteLine($"Active workspace is now '{result.Value.Workspace}'.");
-        Console.WriteLine();
-        Write(result.Value);
+        ConsoleOutput.Success($"Active workspace is now '{result.Value.Workspace}'.");
+        ConfigurationView.Write(result.Value);
 
         return 0;
     }
@@ -155,10 +192,7 @@ public class ConfigCommands(IServiceProvider serviceProvider)
         if (baseUrl is not null &&
             !Uri.TryCreate(baseUrl, UriKind.Absolute, out parsedBaseUrl))
         {
-            await Console.Error.WriteLineAsync(
-                $"'{baseUrl}' is not an absolute URL, e.g. https://api.example.com");
-
-            return 1;
+            return ConsoleOutput.Fail(ConfigurationErrors.InvalidBaseUrl(baseUrl));
         }
 
         using IServiceScope scope = serviceProvider.CreateScope();
@@ -173,11 +207,11 @@ public class ConfigCommands(IServiceProvider serviceProvider)
 
         if (result.IsFailure)
         {
-            return Fail(result.Error);
+            return ConsoleOutput.Fail(result.Error);
         }
 
-        Console.WriteLine($"Updated {result.Value.Location}");
-        Write(result.Value);
+        ConsoleOutput.Success($"Updated {result.Value.Location}");
+        ConfigurationView.Write(result.Value);
 
         return 0;
     }
@@ -190,7 +224,8 @@ public class ConfigCommands(IServiceProvider serviceProvider)
     {
         // Reads the store's location rather than going through a handler: this must keep
         // working when the file is missing or unparseable, since it is how the user finds
-        // the file in order to fix it.
+        // the file in order to fix it. Written plainly, not through Spectre — it is the one
+        // command whose output is meant to be pasted into another one.
         using IServiceScope scope = serviceProvider.CreateScope();
 
         IConfigurationStore store = scope.ServiceProvider.GetRequiredService<IConfigurationStore>();
@@ -198,69 +233,44 @@ public class ConfigCommands(IServiceProvider serviceProvider)
         Console.WriteLine(store.Location);
     }
 
-    private static void Write(ConfigurationResponse configuration)
+    /// <summary>
+    /// Asks which workspace to switch to. Fails rather than guessing when there is nobody to
+    /// ask, or when the file defines nothing to choose between.
+    /// </summary>
+    private static async Task<Result<string>> ChooseWorkspaceAsync(
+        IServiceScope scope,
+        CancellationToken cancellationToken)
     {
-        Console.WriteLine($"File            {configuration.Location}");
-        Console.WriteLine(
-            $"                {(configuration.Exists ? "present" : "not created yet — all values are defaults")}");
-        Console.WriteLine($"Workspace       {configuration.Workspace}");
-        Console.WriteLine();
-        Console.WriteLine(
-            $"baseUrl         {configuration.BaseUrl}{Suffix(configuration.BaseUrlIsDefault)}");
-        Console.WriteLine(
-            $"timeoutSeconds  {configuration.TimeoutSeconds.ToString(CultureInfo.InvariantCulture)}{Suffix(configuration.TimeoutSecondsIsDefault)}");
+        // A list has to be drawn, not just typed into, so this asks for more than the other
+        // prompts do — see ConsoleOutput.CanRedraw.
+        if (!ConsoleOutput.CanRedraw)
+        {
+            return Result.Failure<string>(
+                ConfigurationErrors.WorkspaceNameRequired("activate"));
+        }
 
-        // Presence only — printing the key would put a secret on the terminal, into scrollback
-        // and into any transcript the user pastes when asking for help.
-        Console.WriteLine(
-            $"apiKey          {(configuration.ApiKeyIsSet ? "set" : "not set")}");
-        Console.WriteLine(
-            $"userId          {configuration.UserId?.ToString() ?? "not set"}");
+        Result<WorkspacesResponse> workspaces = await ListWorkspacesAsync(scope, cancellationToken);
+
+        if (workspaces.IsFailure)
+        {
+            return Result.Failure<string>(workspaces.Error);
+        }
+
+        // The listing always includes the default workspace, so an empty one means a file
+        // that has been edited into a state with nothing selectable in it at all.
+        return workspaces.Value.Workspaces.Count == 0
+            ? Result.Failure<string>(ConfigurationErrors.NoWorkspaces(workspaces.Value.Location))
+            : Result.Success(ConfigPrompts.SelectWorkspace(workspaces.Value.Workspaces).Name);
     }
 
-    private static void Write(WorkspacesResponse workspaces)
+    private static async Task<Result<WorkspacesResponse>> ListWorkspacesAsync(
+        IServiceScope scope,
+        CancellationToken cancellationToken)
     {
-        Console.WriteLine($"File            {workspaces.Location}");
-        Console.WriteLine(
-            $"                {(workspaces.Exists ? "present" : "not created yet — all values are defaults")}");
-        Console.WriteLine();
+        IQueryHandler<ListWorkspacesQuery, WorkspacesResponse> handler =
+            scope.ServiceProvider
+                .GetRequiredService<IQueryHandler<ListWorkspacesQuery, WorkspacesResponse>>();
 
-        foreach (string name in workspaces.Names)
-        {
-            bool isActive = string.Equals(name, workspaces.Active, StringComparison.OrdinalIgnoreCase);
-
-            Console.WriteLine($"{(isActive ? "*" : " ")} {name}");
-        }
-
-        // A hand-edited file can point at a workspace that is not there. Say so here rather
-        // than leaving the user to wonder why nothing is marked active.
-        if (workspaces.ActiveIsMissing)
-        {
-            Console.WriteLine();
-            Console.Error.WriteLine(
-                $"The active workspace '{workspaces.Active}' is not defined in this file. " +
-                $"Run `share config create {workspaces.Active}` to add it, or " +
-                "`share config activate <name>` to pick one of the above.");
-        }
-    }
-
-    private static string Suffix(bool isDefault) => isDefault ? "  (default)" : string.Empty;
-
-    private static int Fail(Error error)
-    {
-        // A validation failure carries one message per broken rule; show them all.
-        if (error is ValidationError validationError)
-        {
-            foreach (Error inner in validationError.Errors)
-            {
-                Console.Error.WriteLine(inner.Description);
-            }
-        }
-        else
-        {
-            Console.Error.WriteLine(error.Description);
-        }
-
-        return 1;
+        return await handler.Handle(new ListWorkspacesQuery(), cancellationToken);
     }
 }

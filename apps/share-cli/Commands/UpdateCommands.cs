@@ -5,6 +5,7 @@ using Share.Application.Abstractions.Messaging;
 using Share.Application.Updates.Apply;
 using Share.Application.Updates.Check;
 using Share.Application.Updates.Install;
+using Share.Cli.Rendering;
 using Share.Domain.Updates;
 using SharedKernel;
 
@@ -226,21 +227,5 @@ public class UpdateCommands(IServiceProvider serviceProvider)
         _ => "up to date"
     };
 
-    private static int Fail(Error error)
-    {
-        // A validation failure carries one message per broken rule; show them all.
-        if (error is ValidationError validationError)
-        {
-            foreach (Error inner in validationError.Errors)
-            {
-                Console.Error.WriteLine(inner.Description);
-            }
-        }
-        else
-        {
-            Console.Error.WriteLine(error.Description);
-        }
-
-        return 1;
-    }
+    private static int Fail(Error error) => ConsoleOutput.Fail(error);
 }

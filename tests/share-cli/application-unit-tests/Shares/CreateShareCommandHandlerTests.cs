@@ -2,6 +2,7 @@ using NSubstitute;
 using Share.Application.Abstractions.Api;
 using Share.Application.Abstractions.Configuration;
 using Share.Application.Abstractions.FileSystem;
+using Share.Application.Abstractions.Progress;
 using Share.Application.Abstractions.Storage;
 using Share.Application.Shares.Create;
 using Share.Application.UnitTests.Api;
@@ -36,7 +37,11 @@ public class CreateShareCommandHandlerTests
         _scanner.Scan(Arg.Any<string>()).Returns(Result.Success(Scanned(Readme, Logo)));
 
         _uploader
-            .UploadAsync(Arg.Any<Uri>(), Arg.Any<LocalFile>(), Arg.Any<CancellationToken>())
+            .UploadAsync(
+                Arg.Any<Uri>(),
+                Arg.Any<LocalFile>(),
+                Arg.Any<IProgress<long>?>(),
+                Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
         _store
@@ -72,9 +77,12 @@ public class CreateShareCommandHandlerTests
 
     private CreateShareCommandHandler Handler() => new(_scanner, _api, _uploader, _store);
 
-    private Task<Result<CreateShareResponse>> Handle(Guid? ownerUserId = null, int? ttlMinutes = null) =>
+    private Task<Result<CreateShareResponse>> Handle(
+        Guid? ownerUserId = null,
+        int? ttlMinutes = null,
+        IUploadProgressReporter? progress = null) =>
         Handler().Handle(
-            new CreateShareCommand(Root, ownerUserId, ttlMinutes),
+            new CreateShareCommand(Root, ownerUserId, ttlMinutes, progress),
             TestContext.Current.CancellationToken);
 
     [Fact]
@@ -111,10 +119,12 @@ public class CreateShareCommandHandlerTests
         await _uploader.Received(1).UploadAsync(
             new Uri($"https://storage.example/{Readme.RelativePath}"),
             Readme,
+            Arg.Any<IProgress<long>?>(),
             Arg.Any<CancellationToken>());
         await _uploader.Received(1).UploadAsync(
             new Uri($"https://storage.example/{Logo.RelativePath}"),
             Logo,
+            Arg.Any<IProgress<long>?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -205,8 +215,11 @@ public class CreateShareCommandHandlerTests
 
         result.IsFailure.ShouldBeTrue();
         result.Error.ShouldBe(error);
-        await _uploader.DidNotReceive()
-            .UploadAsync(Arg.Any<Uri>(), Arg.Any<LocalFile>(), Arg.Any<CancellationToken>());
+        await _uploader.DidNotReceive().UploadAsync(
+            Arg.Any<Uri>(),
+            Arg.Any<LocalFile>(),
+            Arg.Any<IProgress<long>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -231,15 +244,22 @@ public class CreateShareCommandHandlerTests
     {
         Error error = Domain.Shares.ShareErrors.UploadRejected(Readme.RelativePath, 403);
         _uploader
-            .UploadAsync(Arg.Any<Uri>(), Readme, Arg.Any<CancellationToken>())
+            .UploadAsync(
+                Arg.Any<Uri>(),
+                Readme,
+                Arg.Any<IProgress<long>?>(),
+                Arg.Any<CancellationToken>())
             .Returns(Result.Failure(error));
 
         Result<CreateShareResponse> result = await Handle();
 
         result.IsFailure.ShouldBeTrue();
         result.Error.ShouldBe(error);
-        await _uploader.DidNotReceive()
-            .UploadAsync(Arg.Any<Uri>(), Logo, Arg.Any<CancellationToken>());
+        await _uploader.DidNotReceive().UploadAsync(
+            Arg.Any<Uri>(),
+            Logo,
+            Arg.Any<IProgress<long>?>(),
+            Arg.Any<CancellationToken>());
         await _api.DidNotReceive().FinalizeShareAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
@@ -253,5 +273,73 @@ public class CreateShareCommandHandlerTests
 
         result.IsFailure.ShouldBeTrue();
         result.Error.ShouldBe(error);
+    }
+
+    [Fact]
+    public async Task Handle_Should_ReportProgress_FileByFileInUploadOrder()
+    {
+        var progress = new RecordingUploadProgressReporter();
+
+        await Handle(progress: progress);
+
+        // The totals come first so a bar can be sized before anything moves, and each file is
+        // reported complete before the next one starts.
+        progress.Calls.ShouldBe([
+            "starting 2 2060",
+            $"start {Readme.RelativePath} 12",
+            $"done {Readme.RelativePath}",
+            $"start {Logo.RelativePath} 2048",
+            $"done {Logo.RelativePath}"
+        ]);
+    }
+
+    [Fact]
+    public async Task Handle_Should_GiveTheUploaderSomewhereToReportBytesTo()
+    {
+        var progress = new RecordingUploadProgressReporter();
+
+        // Whatever the handler hands the uploader has to end up at the caller's reporter:
+        // the byte counts are the only thing that moves the bar within a large file.
+        _uploader
+            .UploadAsync(
+                Arg.Any<Uri>(),
+                Readme,
+                Arg.Do<IProgress<long>?>(sink => sink?.Report(6)),
+                Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+
+        await Handle(progress: progress);
+
+        progress.Calls.ShouldContain("bytes 6");
+    }
+
+    [Fact]
+    public async Task Handle_Should_NotReportAFileAsComplete_WhenItsUploadFailed()
+    {
+        var progress = new RecordingUploadProgressReporter();
+        _uploader
+            .UploadAsync(
+                Arg.Any<Uri>(),
+                Readme,
+                Arg.Any<IProgress<long>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Result.Failure(Domain.Shares.ShareErrors.UploadRejected(Readme.RelativePath, 403)));
+
+        await Handle(progress: progress);
+
+        progress.Calls.ShouldNotContain($"done {Readme.RelativePath}");
+    }
+
+    [Fact]
+    public async Task Handle_Should_ReportNoProgress_WhenTheShareCannotBeCreated()
+    {
+        // Nothing is going to be uploaded, so a bar that appeared and then vanished would be
+        // worse than none at all.
+        var progress = new RecordingUploadProgressReporter();
+        _api.FailsCreateShare(ShareApiErrors.Unauthorized());
+
+        await Handle(progress: progress);
+
+        progress.Calls.ShouldBeEmpty();
     }
 }

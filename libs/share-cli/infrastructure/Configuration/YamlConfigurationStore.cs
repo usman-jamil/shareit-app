@@ -102,12 +102,24 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
     {
         Result<WorkspaceDocument> document = await LoadAsync(cancellationToken);
 
+        if (document.IsFailure)
+        {
+            return Result.Failure<WorkspaceList>(document.Error);
+        }
+
+        // Base URLs are taken exactly as the file spells them, without the parsing ReadAsync
+        // does: a listing must survive a workspace whose URL is nonsense, because seeing that
+        // is the point. Nothing else is read across the workspaces — least of all their keys.
+        List<WorkspaceSummary> workspaces =
+        [
+            .. document.Value.Workspaces.Select(name => new WorkspaceSummary(
+                name,
+                RawValue(document.Value, name, BaseUrlKey)))
+        ];
+
         // Deliberately does not check that the active workspace exists: listing is how the
         // user diagnoses a file that names one that does not.
-        return document.IsFailure
-            ? Result.Failure<WorkspaceList>(document.Error)
-            : Result.Success(
-                new WorkspaceList(document.Value.ActiveWorkspace, document.Value.Workspaces));
+        return Result.Success(new WorkspaceList(document.Value.ActiveWorkspace, workspaces));
     }
 
     public async Task<Result> CreateWorkspaceAsync(
@@ -204,6 +216,16 @@ internal sealed class YamlConfigurationStore : IConfigurationStore
 
         return Result.Success(new ShareApiSettings(baseUrl, timeoutSeconds, apiKey, userId));
     }
+
+    /// <summary>
+    /// One setting of one workspace as written, or <see langword="null"/> when it is unset or
+    /// blank. Reads through the same flattening the provider uses, so a listing and a switch
+    /// to that workspace can never disagree about what it says.
+    /// </summary>
+    private static string? RawValue(WorkspaceDocument document, string workspace, string key) =>
+        TryGet(YamlConfigurationParser.Flatten(document.Read(workspace)), key, out string? value)
+            ? value
+            : null;
 
     private static bool TryGet(
         IDictionary<string, string?> values,

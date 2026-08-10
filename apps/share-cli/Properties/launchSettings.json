@@ -52,7 +52,7 @@
     },
     "create-share": {
       "commandName": "Project",
-      "commandLineArgs": "create -p /Users/usmanjamil/Desktop/Clark",
+      "commandLineArgs": "create -p /Users/usmanjamil/Desktop/test",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }

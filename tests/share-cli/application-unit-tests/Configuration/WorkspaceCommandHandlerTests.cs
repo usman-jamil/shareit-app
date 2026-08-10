@@ -53,6 +53,61 @@ public class WorkspaceCommandHandlerTests
     }
 
     [Fact]
+    public async Task Create_Should_WriteTheSettingsIntoIt_WhenItWasGivenSome()
+    {
+        var settings = new ShareApiSettings(
+            new Uri("https://dev.example.com"),
+            null,
+            "sk_test_key",
+            Guid.NewGuid());
+        _store.SaveAsync(Arg.Any<ShareApiSettings>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+
+        Result<ConfigurationResponse> result = await _create.Handle(
+            new CreateWorkspaceCommand("development", settings),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue();
+
+        // Created first, then written: the new workspace is the active one by then, which is
+        // what makes SaveAsync — which never names a workspace — land in it.
+        Received.InOrder(() =>
+        {
+            _store.CreateWorkspaceAsync("development", Arg.Any<CancellationToken>());
+            _store.SaveAsync(settings, Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Fact]
+    public async Task Create_Should_NotWriteAnything_WhenItWasGivenNoSettings()
+    {
+        await _create.Handle(
+            new CreateWorkspaceCommand("development"),
+            TestContext.Current.CancellationToken);
+
+        await _store.DidNotReceive()
+            .SaveAsync(Arg.Any<ShareApiSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Create_Should_ReportTheWriteFailure_AndLeaveTheWorkspaceInPlace()
+    {
+        // The workspace has been created and made active by this point. Reporting the failed
+        // write and stopping leaves it there, empty, for `config set` to finish.
+        Error error = ConfigurationErrors.Unwritable(Location, "disk full");
+        _store.SaveAsync(Arg.Any<ShareApiSettings>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Failure(error));
+
+        Result<ConfigurationResponse> result = await _create.Handle(
+            new CreateWorkspaceCommand("development", ShareApiSettings.Empty),
+            TestContext.Current.CancellationToken);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.ShouldBe(error);
+        await _store.DidNotReceive().ReadAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Create_Should_NotReport_WhenTheWorkspaceAlreadyExists()
     {
         Error error = ConfigurationErrors.WorkspaceAlreadyExists(Location, "development");
