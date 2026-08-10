@@ -1,4 +1,5 @@
 using Share.Application.Abstractions.Messaging;
+using Share.Application.Abstractions.Progress;
 
 namespace Share.Application.Shares.Create;
 
@@ -17,5 +18,15 @@ namespace Share.Application.Shares.Create;
 /// How long the share should live. <see langword="null"/> lets the API apply its own
 /// default, which is the normal case.
 /// </param>
-public sealed record CreateShareCommand(string DirectoryPath, Guid? OwnerUserId, int? TtlMinutes)
+/// <param name="Progress">
+/// Where to report upload progress, or <see langword="null"/> to report none. Carried on
+/// the command rather than injected because a display belongs to one invocation: the caller
+/// that renders it is the caller that owns it, and nothing else in the process should be
+/// able to write to it.
+/// </param>
+public sealed record CreateShareCommand(
+    string DirectoryPath,
+    Guid? OwnerUserId,
+    int? TtlMinutes,
+    IUploadProgressReporter? Progress = null)
     : ICommand<CreateShareResponse>;

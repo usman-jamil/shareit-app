@@ -72,6 +72,7 @@ Each project is an **Nx project** defined by its `project.json`. Nx targets (`se
 | API behavior, endpoints, domain logic, persistence    | `apps/api` + `libs/api/*`                                  | Follow the Clean Architecture rules below.                                               |
 | Customer-facing CLI behavior or its business logic    | `apps/share-cli` + `libs/share-cli/*`                            | Never reach into `libs/api/application`, `libs/api/domain` or `libs/api/infrastructure`. |
 | What the customer-facing CLI is configured with       | `~/.shareit/config.yaml` via `share config set`            | The YAML file is the source of truth, not `appsettings.json`. Writes land in the active workspace. |
+| What the customer-facing CLI looks like on screen     | `apps/share-cli/Rendering/`                                | Spectre.Console tables, prompts and progress bars. No rendering below `apps/`.            |
 | The shape of a request/response the frontend consumes | `apps/api` **first**, then regenerate `libs/api/api-types` | The contract is owned by the backend; types are generated, never hand-edited.            |
 | The API client the customer-facing CLI calls          | `apps/api` **first**, then regenerate `libs/share-cli/api-types` | Refitter-generated Refit client; never hand-edit `Generated.cs`.                         |
 | UI, pages, components, client-side state, fetching    | `apps/web`                                                 | Self-contained; consumes `@share/api-types`.                                             |
@@ -146,7 +147,7 @@ This is a **Clean Architecture** solution built on **.NET 10**, minimal APIs, EF
 
 ## `apps/share-cli` — .NET 10 customer-facing cli
 
-The **customer-facing** CLI (`apps/share-cli/Share.Cli.csproj`, namespace `Share.Cli`, assembly/command name `share`). It is built with ConsoleAppFramework and hosted on `Microsoft.Extensions.Hosting`, exactly like `apps/cli`.
+The **customer-facing** CLI (`apps/share-cli/Share.Cli.csproj`, namespace `Share.Cli`, assembly/command name `share`). It is built with ConsoleAppFramework and hosted on `Microsoft.Extensions.Hosting`, exactly like `apps/cli`, and everything it puts on screen goes through **Spectre.Console** (see [`apps/share-cli/Rendering`](#apps-share-cli-rendering--everything-the-user-sees) below).
 
 Unlike `apps/cli`, it does **not** sit on the `libs/api/*` backend. It has its own Clean Architecture stack under `libs/share-cli/`:
 
@@ -163,6 +164,22 @@ Unlike `apps/cli`, it does **not** sit on the `libs/api/*` backend. It has its o
 - The CQRS interfaces are duplicated per stack on purpose: use `Share.Application.Abstractions.Messaging.*` here, never `Application.Abstractions.Messaging.*`.
 - Commands live in `apps/share-cli/Commands/<Feature>Commands.cs` and are registered in `Program.cs` via `consoleApp.Add<T>()`. Keep them thin: resolve the handler from a scope, invoke it, render the result.
 - `Ping` (`libs/share-cli/application/Ping/` + `apps/share-cli/Commands/PingCommands.cs`) is a placeholder slice proving the wiring. The first real use case (`share create`) has landed, so it is now safe to delete.
+
+### `apps/share-cli/Rendering` — everything the user sees
+
+Terminal output is **Spectre.Console**, and it lives in `apps/share-cli/Rendering/` — the only place in the stack that knows what a table or a prompt is.
+
+| Piece                                                       | What it is                                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `ConsoleOutput`                                             | The one way to write: `Fail`/`Warn`/`Success`, the `Fields()` grid, byte formatting |
+| `ConfigurationView`                                         | `config show` as a field list, `config list` as a table                 |
+| `ConfigPrompts` + `PromptedWorkspace`                       | The questions `config create` and `config activate` ask                 |
+| `UploadProgressDisplay`                                     | `share create`'s progress bar, an `IUploadProgressReporter`             |
+
+- **Escape anything a user supplied** before it goes into markup — `ConsoleOutput.Value`/`Muted`/`Label` do it, and `Markup.Escape` is the manual form. A file path containing `[` is otherwise read as a style tag and either vanishes or throws.
+- **Failures go to stderr**, through `ConsoleOutput.Fail`, which returns the exit code so a command can `return ConsoleOutput.Fail(error)`. `AnsiConsole` writes to stdout, so it must not be used for them. `config path` is the one command that writes plain `Console.WriteLine` — its output is meant to be pasted into another command.
+- **Two levels of "is there a human here", and they are not the same.** `ConsoleOutput.IsInteractive` means something can be typed (a text prompt is safe); `ConsoleOutput.CanRedraw` also requires ANSI, which a selection list and a live progress bar both need. Spectre **throws** for a selection list on a terminal that cannot be drawn on, so check `CanRedraw` before showing one.
+- **A command given all its arguments never prompts.** Prompting is what happens when an optional `[Argument]` was omitted _and_ there is a terminal; without one it fails with `Configuration.WorkspaceNameRequired` rather than hanging. That is what keeps every command scriptable.
 
 ### `libs/share-cli/api-types` — the CLI's generated API client
 
@@ -217,8 +234,10 @@ The seam between the CLI's use cases and HTTP:
 | ----------------------------------------------- | ----------------------------------------------- |
 | `IFileScanner`, `LocalFile`, `ScannedDirectory` | `libs/share-cli/application/Abstractions/FileSystem/` |
 | `IFileUploader`                                 | `libs/share-cli/application/Abstractions/Storage/`    |
+| `IUploadProgressReporter`, `NullUploadProgressReporter` | `libs/share-cli/application/Abstractions/Progress/` |
 | `FileScanner`, `ContentTypes`                   | `libs/share-cli/infrastructure/FileSystem/`           |
-| `PresignedFileUploader`                         | `libs/share-cli/infrastructure/Storage/`              |
+| `PresignedFileUploader`, `ProgressReportingStream` | `libs/share-cli/infrastructure/Storage/`           |
+| `UploadProgressDisplay`                         | `apps/share-cli/Rendering/`                           |
 | `ShareErrors`                                   | `libs/share-cli/domain/Shares/`                       |
 
 - **The handler owns the sequence, not the I/O.** It resolves the owner, scans, calls `CreateShareAsync`, uploads each file, then calls `FinalizeShareAsync`. Every step is a `Result` check — nothing throws.
@@ -228,6 +247,9 @@ The seam between the CLI's use cases and HTTP:
 - **`PresignedFileUploader` gets its own `HttpClient`**, registered in `Infrastructure/DependencyInjection.cs` _without_ `ApiKeyHeaderHandler` and with no timeout — presigned URLs point at object storage, the API key must not travel there, and an upload takes as long as the file is (cancellation stops it). Keep both properties if you touch that registration.
 - **The owner comes from `--user-id`, falling back to `userId` in the active workspace of the configuration file.** Unlike the other settings this one is read through `IConfigurationStore` rather than `IOptions`, so it is file-only — no `ShareApi__UserId` environment variable. The API takes `OwnerUserId` explicitly today; if it ever derives the owner from the API key, this fallback is the thing to delete.
 - The API's manifest carries sizes as a 32-bit value, so a single file over `int.MaxValue` bytes fails with `Share.FileTooLarge` before anything is sent.
+- **Progress is carried on the command, not injected.** `CreateShareCommand.Progress` is an optional `IUploadProgressReporter`; `ShareCommands` supplies `UploadProgressDisplay` for the length of one `AnsiConsole.Progress()` block, and the handler falls back to `NullUploadProgressReporter`. A display belongs to one invocation, so it is passed in rather than registered — do not turn it into a DI service with mutable state.
+- **The bar is measured in bytes, and counted where the bytes leave the file.** `ProgressReportingStream` wraps the `FileStream` and reports a running total, which is why a 2 GB video does not tick past at the same rate as a README. That stream **must stay seekable and keep reporting `Length`**: `StreamContent` derives `Content-Length` from them, and a presigned PUT that arrives chunked instead is rejected. It counts bytes handed to the socket, so a file small enough to fit the send buffer reads as complete before it has arrived — only the `Result` says it landed.
+- **No terminal, no bar.** `ShareCommands` checks `ConsoleOutput.CanRedraw` and otherwise runs the same handler with no reporter, so piping the command into a file does not fill it with escape codes.
 
 ### `share update` — the self-update use case
 
@@ -263,6 +285,7 @@ Two unit-test projects, mirroring `tests/api`. Both are xUnit v3 on the Microsof
 | `Share.Infrastructure.UnitTests` (`tests/share-cli/infrastructure-unit-tests/`) | `ShareApiClient`, `ApiKeyHeaderHandler`, the update infrastructure, the configuration file and its workspaces | `Refit.Testing`'s `StubHttp`, `StubRoutedHandler`, a real file under `SHARE_CLI_CONFIG` |
 
 - **Handler tests never touch HTTP.** Take an `IShareApiClient` from `ShareApiClientSubstitute.Create()` (every operation succeeds with `ShareApiData`), then re-arrange the one call the test is about with `FailsGetUser`/`FailsCreateShare`/`FailsFinalizeShare`/`FailsGetShare`. The update handlers follow the same convention through `UpdateSubstitutes`/`UpdateData` (`FailsGetLatest`, `FailsStage`, `FailsReplace`, `FailsStart`, `FailsWait`).
+- **Progress is asserted as a sequence, not as counters.** `RecordingUploadProgressReporter` writes each call down as a line, so a test pins the whole order (`starting`, then `start`/`done` per file). Order is the property that matters — a file reported complete before it started is a bar that jumps about — and nothing in `apps/share-cli/Rendering` is unit-tested, so this is where the reporting contract is held.
 - **Adapter tests stub the socket, not the client.** `StubHttp` is a route table (`Route.Get("/shares/{shareId}")` → `Reply.With(...)`/`Reply.Json(...)`/`Reply.Status(...)`) handed to `http.CreateGeneratedClient<IApiv1>(baseUrl)`, so the real generated Refit client, its serializer and Refit's exception behaviour are all exercised. That is where each `Error` mapping (404, 409, 400 + `errors`, 401/403, unreachable, failed envelope) is pinned.
 - **The update infrastructure is not Refit**, so it stubs the socket with `StubRoutedHandler` (routes by absolute URL) instead. `UpdatePackageInstallerTests` builds a real gzipped tar in the test and serves it, so the download, the SHA-256 check and the unpacking are all the production code path. `UpdateProcessLauncher` is covered only for waiting — starting it would clone and run the test host, so the launch path is proven by publishing the CLI and running a real update instead.
 - Wire payloads are built from the **generated contract types** in `ShareApiResponses`, so a regenerated `Generated.cs` breaks the build rather than letting the tests drift. Only the ProblemDetails bodies are raw JSON — the API composes those itself and they are not in the generated client.
@@ -297,9 +320,11 @@ development:
 
 ```bash
 share config show                              # effective values of the active workspace
-share config list                              # every workspace, `*` marks the active one
-share config create development                # add a workspace and make it active
+share config list                              # every workspace as a table: name + base URL
+share config create development                # add an empty workspace and make it active
+share config create                            # ask for name, base URL, API key and user id
 share config activate shareApi                 # point the CLI at another workspace
+share config activate                          # pick one from a list
 share config set --base-url https://api.example.com --timeout-seconds 45
 share config set --api-key sk_live_...         # or -k
 share config set --user-id <id>                # or -i; the owner `share create` uses
@@ -307,6 +332,9 @@ share config path                              # where the file is
 ```
 
 - **Every read and write acts on the active workspace, and only `activate` changes which that is.** `show`, `set` and `share create` never name a workspace, so switching servers is one command and nothing else has to know workspaces exist.
+- **`create` and `activate` ask only for what they were not told.** Given a name, both behave exactly as they always have — `create <name>` still makes an *empty* workspace and prompts for nothing, which is the form scripts use. Given none, `create` asks for the four settings and `activate` shows a list. See `apps/share-cli/Rendering` for the terminal checks that keep both safe to script.
+- **A prompted `create` writes once.** The settings travel on `CreateWorkspaceCommand.Settings` and the handler creates the workspace and then saves into it, rather than the command layer calling `create` and then `set` — a half-configured workspace should not be reachable. If the second write fails the empty workspace is left in place for `config set` to finish, deliberately.
+- **`config list` reads every workspace's `baseUrl` but nothing else** — `WorkspaceList` carries `WorkspaceSummary` (name + base URL as written, unparsed). It is the one operation that reads across all workspaces at once, so it must never grow a secret; and it must not validate, because seeing a URL that is wrong is the point.
 - **The default workspace is `shareApi`** (`ConfigurationWorkspaces.DefaultName`) and always exists, whether or not the file has a section for it. A file written before workspaces landed is therefore already a valid one-workspace file — there is no migration.
 - **A file naming an `active_workspace` it does not define is a read failure** (`Configuration.WorkspaceNotFound`), not a fall back to defaults: defaulting would quietly aim the next command at localhost with no key. `config list` is the exception and still succeeds, because it is how the user diagnoses that file.
 - **`create` refuses to overwrite an existing workspace and `activate` refuses to invent one.** Creating implicitly on `activate` would hide a typo behind a set of silently defaulted settings.

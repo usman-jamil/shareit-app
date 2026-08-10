@@ -22,13 +22,22 @@ internal sealed class PresignedFileUploader(HttpClient httpClient) : IFileUpload
     public async Task<Result> UploadAsync(
         Uri uploadUrl,
         LocalFile file,
+        IProgress<long>? bytesUploaded = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(file);
 
         try
         {
-            await using FileStream stream = File.OpenRead(file.FullPath);
+            await using FileStream source = File.OpenRead(file.FullPath);
+
+            // Counting happens on the way out of the file rather than being estimated from
+            // the file size, so what is reported is what has actually been handed to the
+            // socket. Unwrapped when nobody is watching — an untracked upload should not pay
+            // for a callback per read.
+            Stream stream = bytesUploaded is null
+                ? source
+                : new ProgressReportingStream(source, bytesUploaded);
 
             using var content = new StreamContent(stream);
 

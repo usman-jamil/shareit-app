@@ -3,7 +3,9 @@ using ConsoleAppFramework;
 using Microsoft.Extensions.DependencyInjection;
 using Share.Application.Abstractions.Messaging;
 using Share.Application.Shares.Create;
+using Share.Cli.Rendering;
 using SharedKernel;
+using Spectre.Console;
 
 namespace Share.Cli.Commands;
 
@@ -32,13 +34,20 @@ public class ShareCommands(IServiceProvider serviceProvider)
             scope.ServiceProvider
                 .GetRequiredService<ICommandHandler<CreateShareCommand, CreateShareResponse>>();
 
-        Result<CreateShareResponse> result = await handler.Handle(
-            new CreateShareCommand(path ?? Directory.GetCurrentDirectory(), userId, ttlMinutes),
-            cancellationToken);
+        var command = new CreateShareCommand(
+            path ?? Directory.GetCurrentDirectory(),
+            userId,
+            ttlMinutes);
+
+        // A live bar needs a terminal it can redraw. Piped into a file or run in CI it would
+        // write a screenful of escape codes per second, so there it simply uploads quietly.
+        Result<CreateShareResponse> result = ConsoleOutput.CanRedraw
+            ? await UploadWithProgressAsync(handler, command, cancellationToken)
+            : await handler.Handle(command, cancellationToken);
 
         if (result.IsFailure)
         {
-            return Fail(result.Error);
+            return ConsoleOutput.Fail(result.Error);
         }
 
         Write(result.Value);
@@ -46,48 +55,50 @@ public class ShareCommands(IServiceProvider serviceProvider)
         return 0;
     }
 
+    /// <summary>
+    /// Runs the upload inside a live progress display, handing the handler somewhere to
+    /// report to.
+    /// </summary>
+    private static async Task<Result<CreateShareResponse>> UploadWithProgressAsync(
+        ICommandHandler<CreateShareCommand, CreateShareResponse> handler,
+        CreateShareCommand command,
+        CancellationToken cancellationToken)
+    {
+        return await AnsiConsole.Progress()
+            // The finished bar is left on screen: it is the record of what was uploaded, and
+            // the summary below it reads as a continuation of it.
+            .AutoClear(false)
+            .HideCompleted(false)
+            .Columns(UploadProgressDisplay.Columns())
+            .StartAsync(async context =>
+            {
+                var display = new UploadProgressDisplay(context);
+
+                Result<CreateShareResponse> result =
+                    await handler.Handle(command with { Progress = display }, cancellationToken);
+
+                if (result.IsSuccess)
+                {
+                    display.Complete();
+                }
+
+                return result;
+            });
+    }
+
     private static void Write(CreateShareResponse share)
     {
-        Console.WriteLine($"Share      {share.ShareId}");
-        Console.WriteLine($"Folder     {share.Root}");
-        Console.WriteLine(
-            $"Uploaded   {share.FileCount.ToString(CultureInfo.InvariantCulture)} " +
-            $"{(share.FileCount == 1 ? "file" : "files")}, {Describe(share.TotalBytes)}");
-    }
+        Grid fields = ConsoleOutput.Fields();
 
-    private static string Describe(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        fields.AddRow(ConsoleOutput.Label("Share"), $"[bold]{ConsoleOutput.Value(share.ShareId.ToString())}[/]");
+        fields.AddRow(ConsoleOutput.Label("Folder"), ConsoleOutput.Value(share.Root));
+        fields.AddRow(
+            ConsoleOutput.Label("Uploaded"),
+            ConsoleOutput.Value(
+                $"{share.FileCount.ToString(CultureInfo.InvariantCulture)} " +
+                $"{(share.FileCount == 1 ? "file" : "files")}, {ConsoleOutput.Bytes(share.TotalBytes)}"));
 
-        double size = bytes;
-        int unit = 0;
-
-        while (size >= 1024 && unit < units.Length - 1)
-        {
-            size /= 1024;
-            unit++;
-        }
-
-        return unit == 0
-            ? $"{bytes.ToString(CultureInfo.InvariantCulture)} {units[unit]}"
-            : $"{size.ToString("0.#", CultureInfo.InvariantCulture)} {units[unit]}";
-    }
-
-    private static int Fail(Error error)
-    {
-        // A validation failure carries one message per broken rule; show them all.
-        if (error is ValidationError validationError)
-        {
-            foreach (Error inner in validationError.Errors)
-            {
-                Console.Error.WriteLine(inner.Description);
-            }
-        }
-        else
-        {
-            Console.Error.WriteLine(error.Description);
-        }
-
-        return 1;
+        AnsiConsole.WriteLine();
+        ConsoleOutput.Write(fields);
     }
 }

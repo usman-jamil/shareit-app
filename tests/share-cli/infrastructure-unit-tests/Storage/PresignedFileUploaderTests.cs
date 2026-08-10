@@ -65,7 +65,10 @@ public sealed class PresignedFileUploaderTests : IDisposable
         LocalFile file = Given("report.txt", "the contents", "text/plain");
         (PresignedFileUploader uploader, RecordingHandler handler) = UploaderFor();
 
-        Result result = await uploader.UploadAsync(UploadUrl, file, TestContext.Current.CancellationToken);
+        Result result = await uploader.UploadAsync(
+            UploadUrl,
+            file,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue();
         handler.Method.ShouldBe(HttpMethod.Put);
@@ -80,7 +83,10 @@ public sealed class PresignedFileUploaderTests : IDisposable
         LocalFile file = Given("blob.unknownext", "bytes", contentType: null);
         (PresignedFileUploader uploader, RecordingHandler handler) = UploaderFor();
 
-        Result result = await uploader.UploadAsync(UploadUrl, file, TestContext.Current.CancellationToken);
+        Result result = await uploader.UploadAsync(
+            UploadUrl,
+            file,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue();
         handler.ContentType.ShouldBe("application/octet-stream");
@@ -92,7 +98,10 @@ public sealed class PresignedFileUploaderTests : IDisposable
         LocalFile file = Given("report.txt", "the contents", "text/plain");
         (PresignedFileUploader uploader, _) = UploaderFor(HttpStatusCode.Forbidden);
 
-        Result result = await uploader.UploadAsync(UploadUrl, file, TestContext.Current.CancellationToken);
+        Result result = await uploader.UploadAsync(
+            UploadUrl,
+            file,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("Share.UploadRejected");
@@ -107,7 +116,10 @@ public sealed class PresignedFileUploaderTests : IDisposable
         (PresignedFileUploader uploader, _) =
             UploaderFor(new RecordingHandler(new HttpRequestException("connection refused")));
 
-        Result result = await uploader.UploadAsync(UploadUrl, file, TestContext.Current.CancellationToken);
+        Result result = await uploader.UploadAsync(
+            UploadUrl,
+            file,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("Share.UploadFailed");
@@ -121,11 +133,61 @@ public sealed class PresignedFileUploaderTests : IDisposable
         File.Delete(file.FullPath);
         (PresignedFileUploader uploader, RecordingHandler handler) = UploaderFor();
 
-        Result result = await uploader.UploadAsync(UploadUrl, file, TestContext.Current.CancellationToken);
+        Result result = await uploader.UploadAsync(
+            UploadUrl,
+            file,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("Share.FileUnreadable");
         handler.Method.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task UploadAsync_Should_ReportTheBytesItSends_AsARunningTotal()
+    {
+        LocalFile file = Given("report.txt", "the contents", "text/plain");
+        (PresignedFileUploader uploader, _) = UploaderFor();
+        var reported = new List<long>();
+
+        Result result = await uploader.UploadAsync(
+            UploadUrl,
+            file,
+            new Recorder(reported),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue();
+
+        // The counts must never go backwards and must end on the file's length: a caller is
+        // going to set a bar to them directly.
+        reported.ShouldNotBeEmpty();
+        reported.ShouldBeInOrder();
+        reported[^1].ShouldBe(file.Size);
+    }
+
+    [Fact]
+    public async Task UploadAsync_Should_StillDeclareContentLength_WhenReportingProgress()
+    {
+        // Counting the bytes must not cost the request its Content-Length. Storage signs a
+        // presigned PUT for a request that declares its length; one that arrived chunked
+        // instead would be rejected.
+        LocalFile file = Given("report.txt", "the contents", "text/plain");
+        (PresignedFileUploader uploader, RecordingHandler handler) = UploaderFor();
+
+        Result result = await uploader.UploadAsync(
+            UploadUrl,
+            file,
+            new Recorder([]),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue();
+        handler.ContentLength.ShouldBe(file.Size);
+        handler.Body.ShouldBe("the contents");
+    }
+
+    private sealed class Recorder(List<long> reported) : IProgress<long>
+    {
+        public void Report(long value) => reported.Add(value);
     }
 
     private sealed class RecordingHandler(HttpStatusCode status) : HttpMessageHandler
@@ -143,6 +205,8 @@ public sealed class PresignedFileUploaderTests : IDisposable
 
         public string? ContentType { get; private set; }
 
+        public long? ContentLength { get; private set; }
+
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
@@ -157,6 +221,7 @@ public sealed class PresignedFileUploaderTests : IDisposable
             Method = request.Method;
             RequestUri = request.RequestUri;
             ContentType = request.Content?.Headers.ContentType?.ToString();
+            ContentLength = request.Content?.Headers.ContentLength;
 
             if (request.Content is not null)
             {

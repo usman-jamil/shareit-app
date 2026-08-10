@@ -9,7 +9,7 @@ namespace Share.Application.Configuration.List;
 /// <param name="Location">Absolute path of the configuration file.</param>
 /// <param name="Exists">Whether that file is present.</param>
 /// <param name="Active">The workspace reads and writes currently go to.</param>
-/// <param name="Names">The defined workspaces, in the order the file holds them.</param>
+/// <param name="Workspaces">The defined workspaces, in the order the file holds them.</param>
 /// <param name="ActiveIsMissing">
 /// Whether <paramref name="Active"/> names a workspace the file does not define — a
 /// hand-edited file can, and this listing is how the user is told so.
@@ -18,7 +18,7 @@ public sealed record WorkspacesResponse(
     string Location,
     bool Exists,
     string Active,
-    IReadOnlyList<string> Names,
+    IReadOnlyList<WorkspaceView> Workspaces,
     bool ActiveIsMissing)
 {
     public static WorkspacesResponse From(string location, bool exists, WorkspaceList workspaces)
@@ -29,7 +29,8 @@ public sealed record WorkspacesResponse(
             location,
             exists,
             workspaces.Active,
-            workspaces.Names,
-            !workspaces.Names.Contains(workspaces.Active, ConfigurationWorkspaces.NameComparer));
+            [.. workspaces.Workspaces.Select(workspace => WorkspaceView.From(workspace, workspaces.Active))],
+            !workspaces.Workspaces.Any(workspace =>
+                ConfigurationWorkspaces.NameComparer.Equals(workspace.Name, workspaces.Active)));
     }
 }
